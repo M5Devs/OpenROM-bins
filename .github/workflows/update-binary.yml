@@ -1,5 +1,5 @@
 name: Update Binary
-
+ 
 on:
   workflow_dispatch:
     inputs:
@@ -16,142 +16,142 @@ on:
       version:
         description: 'New version e.g. 1.13.0'
         required: true
-
+ 
 permissions:
   contents: write
-
+ 
 jobs:
   update-binary:
     name: Update ${{ github.event.inputs.tool }} to v${{ github.event.inputs.version }}
     runs-on: ubuntu-22.04
-
+ 
     steps:
       - name: Checkout OpenROM-bins
         uses: actions/checkout@v7
-
+ 
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -q wget unzip p7zip-full
-
+ 
       - name: Download and install ${{ github.event.inputs.tool }}
           set -e
           BASE_URL="https://github.com"
-
+ 
           case "$TOOL" in
-
+ 
             # ── maxcso ────────────────────────────────────────────────────────
             maxcso)
               mkdir -p linux/x86_64 macos/x86_64 macos/arm64 windows/x86_64
-
+ 
               # Linux x64
               wget -q "$BASE_URL/unknownbrackets/maxcso/releases/download/v${VERSION}/maxcso_linux.zip" -O maxcso_linux.zip
               unzip -q maxcso_linux.zip -d maxcso_linux_tmp
               cp maxcso_linux_tmp/maxcso linux/x86_64/maxcso
               chmod +x linux/x86_64/maxcso
-
+ 
               # macOS (universal binary — covers both arm64 and x86_64)
               wget -q "$BASE_URL/unknownbrackets/maxcso/releases/download/v${VERSION}/maxcso_mac.zip" -O maxcso_mac.zip
               unzip -q maxcso_mac.zip -d maxcso_mac_tmp
               cp maxcso_mac_tmp/maxcso macos/arm64/maxcso
               cp maxcso_mac_tmp/maxcso macos/x86_64/maxcso
               chmod +x macos/arm64/maxcso macos/x86_64/maxcso
-
+ 
               # Windows x64
               wget -q "$BASE_URL/unknownbrackets/maxcso/releases/download/v${VERSION}/maxcso_windows.zip" -O maxcso_win.zip
               unzip -q maxcso_win.zip -d maxcso_win_tmp
               cp maxcso_win_tmp/maxcso.exe windows/x86_64/maxcso.exe
-
+ 
               rm -rf maxcso_linux.zip maxcso_linux_tmp maxcso_mac.zip maxcso_mac_tmp maxcso_win.zip maxcso_win_tmp
               echo "✅ maxcso updated"
               ;;
-
+ 
             # ── xdelta3 ───────────────────────────────────────────────────────
             xdelta3)
               mkdir -p linux/x86_64 macos/x86_64 macos/arm64 windows/x86_64
-
+ 
               # Linux x64
               wget -q "$BASE_URL/jmacd/xdelta/releases/download/v${VERSION}/xdelta3-${VERSION}-x86_64-linux.tar.gz" -O xdelta_linux.tar.gz
               tar -xzf xdelta_linux.tar.gz
               cp xdelta3 linux/x86_64/xdelta3
               chmod +x linux/x86_64/xdelta3
-
+ 
               # macOS (check if universal binary exists)
               wget -q "$BASE_URL/jmacd/xdelta/releases/download/v${VERSION}/xdelta3-${VERSION}-x86_64-macosx.tar.gz" -O xdelta_mac.tar.gz
               tar -xzf xdelta_mac.tar.gz -C xdelta_mac_tmp --strip-components=0 2>/dev/null || tar -xzf xdelta_mac.tar.gz
               cp xdelta3 macos/x86_64/xdelta3
               cp xdelta3 macos/arm64/xdelta3
               chmod +x macos/x86_64/xdelta3 macos/arm64/xdelta3
-
+ 
               # Windows x64
               wget -q "$BASE_URL/jmacd/xdelta/releases/download/v${VERSION}/xdelta3-${VERSION}-x86_64-win.zip" -O xdelta_win.zip
               unzip -q xdelta_win.zip
               cp xdelta3*.exe windows/x86_64/xdelta3.exe 2>/dev/null || cp xdelta3.exe windows/x86_64/xdelta3.exe
-
+ 
               rm -rf xdelta_linux.tar.gz xdelta_mac.tar.gz xdelta_win.zip xdelta3 xdelta3.exe xdelta_mac_tmp
               echo "✅ xdelta3 updated"
               ;;
-
+ 
             # ── nodtool ───────────────────────────────────────────────────────
             nodtool)
               mkdir -p linux/x86_64 linux/arm64 macos/x86_64 macos/arm64 windows/x86_64
-
+ 
               BASE_NOD="$BASE_URL/encounter/nod/releases/download/v${VERSION}"
-
+ 
               wget -q "$BASE_NOD/nodtool-linux-x86_64"    -O linux/x86_64/nodtool  && chmod +x linux/x86_64/nodtool
               wget -q "$BASE_NOD/nodtool-linux-aarch64"   -O linux/arm64/nodtool   && chmod +x linux/arm64/nodtool
               wget -q "$BASE_NOD/nodtool-macos-arm64"     -O macos/arm64/nodtool   && chmod +x macos/arm64/nodtool
               wget -q "$BASE_NOD/nodtool-macos-x86_64"   -O macos/x86_64/nodtool  && chmod +x macos/x86_64/nodtool
               wget -q "$BASE_NOD/nodtool-windows-x86_64.exe" -O windows/x86_64/nodtool.exe
-
+ 
               echo "✅ nodtool updated"
               ;;
-
+ 
             # ── nkit ──────────────────────────────────────────────────────────
             nkit)
               rm -rf linux/x86_64/nkit linux/arm64/nkit macos/arm64/nkit macos/x86_64/nkit windows/x86_64/nkit
-
+ 
               mkdir -p linux/x86_64/nkit  && wget -q "$BASE_URL/Nanook/NKit/releases/download/v${VERSION}/NKit_CLI_linux-x64_${VERSION}.zip"             -O nkit_linux_x64.zip  && unzip -q nkit_linux_x64.zip  -d linux/x86_64/nkit/  && chmod +x linux/x86_64/nkit/nkit  linux/x86_64/nkit/nkds  && rm nkit_linux_x64.zip
               mkdir -p linux/arm64/nkit   && wget -q "$BASE_URL/Nanook/NKit/releases/download/v${VERSION}/NKit_CLI_linux-arm64_${VERSION}.zip"            -O nkit_linux_arm64.zip && unzip -q nkit_linux_arm64.zip -d linux/arm64/nkit/   && chmod +x linux/arm64/nkit/nkit   linux/arm64/nkit/nkds   && rm nkit_linux_arm64.zip
               mkdir -p macos/arm64/nkit   && wget -q "$BASE_URL/Nanook/NKit/releases/download/v${VERSION}/NKit_CLI_macOS-AppleSilicon_${VERSION}.zip"     -O nkit_mac_arm64.zip  && unzip -q nkit_mac_arm64.zip  -d macos/arm64/nkit/   && chmod +x macos/arm64/nkit/nkit   macos/arm64/nkit/nkds   && rm nkit_mac_arm64.zip
               mkdir -p macos/x86_64/nkit  && wget -q "$BASE_URL/Nanook/NKit/releases/download/v${VERSION}/NKit_CLI_macOS-Intel_${VERSION}.zip"            -O nkit_mac_x64.zip    && unzip -q nkit_mac_x64.zip    -d macos/x86_64/nkit/  && chmod +x macos/x86_64/nkit/nkit  macos/x86_64/nkit/nkds  && rm nkit_mac_x64.zip
               mkdir -p windows/x86_64/nkit && wget -q "$BASE_URL/Nanook/NKit/releases/download/v${VERSION}/NKit_CLI_win-x64_${VERSION}.zip"               -O nkit_win_x64.zip    && unzip -q nkit_win_x64.zip    -d windows/x86_64/nkit/ && rm nkit_win_x64.zip
-
+ 
               echo "✅ nkit updated"
               ;;
-
+ 
             # ── extract-xiso ──────────────────────────────────────────────────
             # NOTE: version format is build-YYYYMMDDHHMM e.g. build-202609111233
             extract-xiso)
               mkdir -p linux/x86_64 macos/x86_64 macos/arm64 windows/x86_64
-
+ 
               BASE_XISO="$BASE_URL/XboxDev/extract-xiso/releases/download/${VERSION}"
-
+ 
               wget -q "$BASE_XISO/extract-xiso_Linux.zip" -O xiso_linux.zip
               unzip -qo xiso_linux.zip
               cp extract-xiso linux/x86_64/extract-xiso && chmod +x linux/x86_64/extract-xiso
               rm -f extract-xiso LICENSE.TXT xiso_linux.zip
-
+ 
               wget -q "$BASE_XISO/extract-xiso_macOS.zip" -O xiso_mac.zip
               unzip -qo xiso_mac.zip
               cp extract-xiso macos/arm64/extract-xiso && cp extract-xiso macos/x86_64/extract-xiso
               chmod +x macos/arm64/extract-xiso macos/x86_64/extract-xiso
               rm -f extract-xiso LICENSE.TXT xiso_mac.zip
-
+ 
               wget -q "$BASE_XISO/extract-xiso-Win64_Release.zip" -O xiso_win.zip
               7z e xiso_win.zip extract-xiso.exe -y -o./
               cp extract-xiso.exe windows/x86_64/extract-xiso.exe
               rm -f extract-xiso.exe xiso_win.zip
-
+ 
               echo "✅ extract-xiso updated"
               ;;
-
+ 
             *)
               echo "❌ Unknown tool: $TOOL"
               exit 1
               ;;
           esac
-
+ 
       - name: Update versions.json
         env:
           TOOL: ${{ github.event.inputs.tool }}
@@ -166,7 +166,7 @@ jobs:
               json.dump(data, f, indent=2)
           print('✅ versions.json updated')
           "
-
+ 
       - name: Commit and push
         env:
           TOOL: ${{ github.event.inputs.tool }}
@@ -178,3 +178,4 @@ jobs:
           git commit -m "chore: update ${TOOL} to v${VERSION}"
           git push origin main
           echo "✅ Pushed to main"
+ 
