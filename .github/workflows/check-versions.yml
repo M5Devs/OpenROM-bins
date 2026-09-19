@@ -1,0 +1,84 @@
+name: Check Binary Versions
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 9 * * 1'  # كل اثنين الصبح
+
+permissions:
+  contents: read
+
+jobs:
+  check-versions:
+    name: Check Latest Versions
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout OpenROM-bins
+        uses: actions/checkout@v7
+
+      - name: Check all tool versions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 << 'EOF'
+          import json
+          import urllib.request
+          import urllib.error
+
+          # Read current versions
+          with open('versions.json') as f:
+              current = json.load(f)
+
+          # Tool → GitHub repo mapping
+          TOOLS = {
+              "chdman":       "mamedev/mame",
+              "maxcso":       "unknownbrackets/maxcso",
+              "nodtool":      "encounter/nod",
+              "nkit":         "Nanook/NKit",
+              "xdelta3":      "jmacd/xdelta",
+              "extract-xiso": "XboxDev/extract-xiso",
+          }
+          # ecm has no GitHub releases — skip it
+
+          def get_latest_release(repo):
+              url = f"https://api.github.com/repos/{repo}/releases/latest"
+              req = urllib.request.Request(url, headers={
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": f"Bearer ${{ secrets.GITHUB_TOKEN }}",
+                  "X-GitHub-Api-Version": "2022-11-28"
+              })
+              try:
+                  with urllib.request.urlopen(req, timeout=10) as r:
+                      data = json.load(r)
+                      tag = data.get("tag_name", "").lstrip("v")
+                      return tag
+              except Exception as e:
+                  return f"ERROR: {e}"
+
+          print("=" * 60)
+          print("OpenROM-bins Version Report")
+          print("=" * 60)
+
+          needs_update = []
+
+          for tool, repo in TOOLS.items():
+              current_ver = current.get(tool, "unknown")
+              latest_ver  = get_latest_release(repo)
+              status = "✅ up to date" if current_ver == latest_ver else "🔴 UPDATE AVAILABLE"
+              print(f"{tool:<15} current: {current_ver:<12} latest: {latest_ver:<12} {status}")
+              if current_ver != latest_ver and not latest_ver.startswith("ERROR"):
+                  needs_update.append((tool, current_ver, latest_ver, repo))
+
+          print("")
+          print("ecm/unecm    → no GitHub releases, built from source — skip")
+          print("=" * 60)
+
+          if needs_update:
+              print("\n⚠️  Tools that need updating:")
+              for tool, old, new, repo in needs_update:
+                  print(f"  • {tool}: {old} → {new}  (https://github.com/{repo}/releases)")
+          else:
+              print("\n🎉 All tools are up to date!")
+
+          EOF
