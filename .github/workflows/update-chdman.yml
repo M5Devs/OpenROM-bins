@@ -1,0 +1,88 @@
+name: Update chdman
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'chdman version e.g. 0.289.0'
+        required: true
+        default: '0.289.0'
+
+permissions:
+  contents: write
+
+jobs:
+  update-chdman:
+    name: Update chdman to v${{ github.event.inputs.version }}
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout OpenROM-bins
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Extract chdman binaries from npm packages
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          set -e
+          mkdir -p linux/x86_64 linux/arm64 macos/arm64 macos/x86_64 windows/x86_64
+
+          echo "Installing chdman npm packages v${VERSION}..."
+
+          npm install @emmercm/chdman-linux-x64@${VERSION}
+          cp node_modules/@emmercm/chdman-linux-x64/chdman linux/x86_64/chdman
+          chmod +x linux/x86_64/chdman
+          echo "✅ linux/x86_64/chdman"
+
+          npm install @emmercm/chdman-linux-arm64@${VERSION}
+          cp node_modules/@emmercm/chdman-linux-arm64/chdman linux/arm64/chdman
+          chmod +x linux/arm64/chdman
+          echo "✅ linux/arm64/chdman"
+
+          npm install @emmercm/chdman-darwin-arm64@${VERSION}
+          cp node_modules/@emmercm/chdman-darwin-arm64/chdman macos/arm64/chdman
+          chmod +x macos/arm64/chdman
+          echo "✅ macos/arm64/chdman"
+
+          npm install @emmercm/chdman-darwin-x64@${VERSION}
+          cp node_modules/@emmercm/chdman-darwin-x64/chdman macos/x86_64/chdman
+          chmod +x macos/x86_64/chdman
+          echo "✅ macos/x86_64/chdman"
+
+          npm install @emmercm/chdman-win32-x64@${VERSION}
+          cp node_modules/@emmercm/chdman-win32-x64/chdman.exe windows/x86_64/chdman.exe
+          echo "✅ windows/x86_64/chdman.exe"
+
+          rm -rf node_modules package-lock.json package.json
+
+      - name: Update versions.json
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          python3 -c "
+          import json
+          with open('versions.json') as f:
+              data = json.load(f)
+          data['chdman'] = '$VERSION'
+          with open('versions.json', 'w') as f:
+              json.dump(data, f, indent=2)
+          print('✅ versions.json updated')
+          "
+
+      - name: Commit and push
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          git config user.email "ci@github.com"
+          git config user.name "GitHub CI"
+          git add -f linux/x86_64/chdman linux/arm64/chdman \
+                     macos/arm64/chdman macos/x86_64/chdman \
+                     windows/x86_64/chdman.exe versions.json
+          git commit -m "chore: update chdman to v${VERSION}"
+          git push origin main
+          echo "✅ Pushed to main"
