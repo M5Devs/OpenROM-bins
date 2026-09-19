@@ -1,0 +1,190 @@
+name: Check All Binary Versions
+
+on:
+  workflow_dispatch:
+
+jobs:
+
+  # ── Windows ──────────────────────────────────────────────────────────────────
+  check-windows:
+    name: Check Windows Binaries
+    runs-on: windows-2022
+    steps:
+      - name: Checkout OpenROM-bins
+        uses: actions/checkout@v7
+
+      - name: Check versions
+        shell: pwsh
+        run: |
+          $bins = @(
+            @{ path="windows\x86_64\chdman.exe";       name="chdman"       },
+            @{ path="windows\x86_64\maxcso.exe";       name="maxcso"       },
+            @{ path="windows\x86_64\nodtool.exe";      name="nodtool"      },
+            @{ path="windows\x86_64\extract-xiso.exe"; name="extract-xiso" },
+            @{ path="windows\x86_64\xdelta3.exe";      name="xdelta3"      },
+            @{ path="windows\x86_64\ecm.exe";          name="ecm"          },
+            @{ path="windows\x86_64\unecm.exe";        name="unecm"        },
+            @{ path="windows\x86_64\nkit\nkit.exe";    name="nkit"         }
+          )
+
+          Write-Host "========================================"
+          Write-Host "Windows x86_64"
+          Write-Host "========================================"
+
+          foreach ($b in $bins) {
+            if (Test-Path $b.path) {
+              $ver = $null
+              foreach ($flag in @("--version", "-version", "")) {
+                try {
+                  if ($flag) {
+                    $ver = (& ".\$($b.path)" $flag 2>&1) | Select-Object -First 1
+                  } else {
+                    $ver = (& ".\$($b.path)" 2>&1) | Select-Object -First 1
+                  }
+                  if ($ver -and $ver -notmatch "^$") { break }
+                } catch {}
+              }
+              $fv = (Get-Item ".\$($b.path)").VersionInfo.FileVersion
+              $size = [math]::Round((Get-Item ".\$($b.path)").Length / 1KB, 1)
+              Write-Host "$($b.name.PadRight(15)) | $("$ver".Trim().Substring(0, [Math]::Min("$ver".Trim().Length, 60)).PadRight(60)) | PE: $fv | ${size} KB"
+            } else {
+              Write-Host "$($b.name.PadRight(15)) | NOT FOUND"
+            }
+          }
+
+  # ── Linux x86_64 ─────────────────────────────────────────────────────────────
+  check-linux-x64:
+    name: Check Linux x86_64 Binaries
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout OpenROM-bins
+        uses: actions/checkout@v7
+
+      - name: Check versions
+        run: |
+          BINS=(
+            "linux/x86_64/chdman:chdman"
+            "linux/x86_64/maxcso:maxcso"
+            "linux/x86_64/nodtool:nodtool"
+            "linux/x86_64/extract-xiso:extract-xiso"
+            "linux/x86_64/xdelta3:xdelta3"
+            "linux/x86_64/ecm:ecm"
+            "linux/x86_64/unecm:unecm"
+            "linux/x86_64/nkit/nkit:nkit"
+          )
+
+          echo "========================================"
+          echo "Linux x86_64"
+          echo "========================================"
+
+          for entry in "${BINS[@]}"; do
+            path="${entry%%:*}"
+            name="${entry##*:}"
+            if [ -f "$path" ]; then
+              chmod +x "$path"
+              ver=$(./"$path" --version 2>&1 | head -1 || ./"$path" 2>&1 | head -1 || echo "N/A")
+              size=$(du -k "$path" | cut -f1)
+              printf "%-15s | %-60s | %s KB\n" "$name" "${ver:0:60}" "$size"
+            else
+              printf "%-15s | NOT FOUND\n" "$name"
+            fi
+          done
+
+  # ── Linux ARM64 ───────────────────────────────────────────────────────────────
+  check-linux-arm64:
+    name: Check Linux ARM64 Binaries
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout OpenROM-bins
+        uses: actions/checkout@v7
+
+      - name: Check versions
+        run: |
+          BINS=(
+            "linux/arm64/chdman:chdman"
+            "linux/arm64/nodtool:nodtool"
+            "linux/arm64/xdelta3:xdelta3"
+            "linux/arm64/ecm:ecm"
+            "linux/arm64/unecm:unecm"
+            "linux/arm64/nkit/nkit:nkit"
+          )
+
+          echo "========================================"
+          echo "Linux ARM64"
+          echo "========================================"
+
+          for entry in "${BINS[@]}"; do
+            path="${entry%%:*}"
+            name="${entry##*:}"
+            if [ -f "$path" ]; then
+              chmod +x "$path"
+              ver=$(./"$path" --version 2>&1 | head -1 || ./"$path" 2>&1 | head -1 || echo "N/A")
+              size=$(du -k "$path" | cut -f1)
+              printf "%-15s | %-60s | %s KB\n" "$name" "${ver:0:60}" "$size"
+            else
+              printf "%-15s | NOT FOUND\n" "$name"
+            fi
+          done
+
+  # ── macOS ─────────────────────────────────────────────────────────────────────
+  check-macos:
+    name: Check macOS Binaries
+    runs-on: macos-15
+    steps:
+      - name: Checkout OpenROM-bins
+        uses: actions/checkout@v7
+
+      - name: Check versions
+        run: |
+          echo "========================================"
+          echo "macOS ARM64"
+          echo "========================================"
+
+          BINS=(
+            "macos/arm64/chdman:chdman"
+            "macos/arm64/maxcso:maxcso"
+            "macos/arm64/nodtool:nodtool"
+            "macos/arm64/extract-xiso:extract-xiso"
+            "macos/arm64/xdelta3:xdelta3"
+            "macos/arm64/nkit/nkit:nkit"
+          )
+
+          for entry in "${BINS[@]}"; do
+            path="${entry%%:*}"
+            name="${entry##*:}"
+            if [ -f "$path" ]; then
+              chmod +x "$path"
+              ver=$(./"$path" --version 2>&1 | head -1 || ./"$path" 2>&1 | head -1 || echo "N/A")
+              size=$(du -k "$path" | cut -f1)
+              printf "%-15s | %-60s | %s KB\n" "$name" "${ver:0:60}" "$size"
+            else
+              printf "%-15s | NOT FOUND\n" "$name"
+            fi
+          done
+
+          echo ""
+          echo "========================================"
+          echo "macOS x86_64"
+          echo "========================================"
+
+          BINS=(
+            "macos/x86_64/chdman:chdman"
+            "macos/x86_64/maxcso:maxcso"
+            "macos/x86_64/nodtool:nodtool"
+            "macos/x86_64/extract-xiso:extract-xiso"
+            "macos/x86_64/xdelta3:xdelta3"
+            "macos/x86_64/nkit/nkit:nkit"
+          )
+
+          for entry in "${BINS[@]}"; do
+            path="${entry%%:*}"
+            name="${entry##*:}"
+            if [ -f "$path" ]; then
+              chmod +x "$path"
+              ver=$(./"$path" --version 2>&1 | head -1 || ./"$path" 2>&1 | head -1 || echo "N/A")
+              size=$(du -k "$path" | cut -f1)
+              printf "%-15s | %-60s | %s KB\n" "$name" "${ver:0:60}" "$size"
+            else
+              printf "%-15s | NOT FOUND\n" "$name"
+            fi
+          done
