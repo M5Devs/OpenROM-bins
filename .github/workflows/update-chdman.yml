@@ -31,34 +31,50 @@ jobs:
         run: |
           set -e
           mkdir -p linux/x86_64 linux/arm64 macos/arm64 macos/x86_64 windows/x86_64
+          mkdir -p tmp_chdman && cd tmp_chdman
 
           echo "Installing chdman npm packages v${VERSION}..."
 
-          npm install @emmercm/chdman-linux-x64@${VERSION}
-          cp node_modules/@emmercm/chdman-linux-x64/chdman linux/x86_64/chdman
-          chmod +x linux/x86_64/chdman
-          echo "✅ linux/x86_64/chdman"
+          # Linux x64
+          mkdir pkg_linux_x64 && cd pkg_linux_x64
+          npm init -y
+          npm install --force --ignore-scripts @emmercm/chdman-linux-x64@${VERSION}
+          find node_modules/@emmercm/chdman-linux-x64 -name "chdman" -type f -exec cp {} ../../linux/x86_64/chdman \;
+          chmod +x ../../linux/x86_64/chdman
+          cd .. && echo "✅ linux/x86_64/chdman"
 
-          npm install @emmercm/chdman-linux-arm64@${VERSION}
-          cp node_modules/@emmercm/chdman-linux-arm64/chdman linux/arm64/chdman
-          chmod +x linux/arm64/chdman
-          echo "✅ linux/arm64/chdman"
+          # Linux arm64
+          mkdir pkg_linux_arm64 && cd pkg_linux_arm64
+          npm init -y
+          npm install --force --ignore-scripts @emmercm/chdman-linux-arm64@${VERSION}
+          find node_modules/@emmercm/chdman-linux-arm64 -name "chdman" -type f -exec cp {} ../../linux/arm64/chdman \;
+          chmod +x ../../linux/arm64/chdman
+          cd .. && echo "✅ linux/arm64/chdman"
 
-          npm install @emmercm/chdman-darwin-arm64@${VERSION}
-          cp node_modules/@emmercm/chdman-darwin-arm64/chdman macos/arm64/chdman
-          chmod +x macos/arm64/chdman
-          echo "✅ macos/arm64/chdman"
+          # macOS arm64
+          mkdir pkg_mac_arm64 && cd pkg_mac_arm64
+          npm init -y
+          npm install --force --ignore-scripts @emmercm/chdman-darwin-arm64@${VERSION}
+          find node_modules/@emmercm/chdman-darwin-arm64 -name "chdman" -type f -exec cp {} ../../macos/arm64/chdman \;
+          chmod +x ../../macos/arm64/chdman
+          cd .. && echo "✅ macos/arm64/chdman"
 
-          npm install @emmercm/chdman-darwin-x64@${VERSION}
-          cp node_modules/@emmercm/chdman-darwin-x64/chdman macos/x86_64/chdman
-          chmod +x macos/x86_64/chdman
-          echo "✅ macos/x86_64/chdman"
+          # macOS x64
+          mkdir pkg_mac_x64 && cd pkg_mac_x64
+          npm init -y
+          npm install --force --ignore-scripts @emmercm/chdman-darwin-x64@${VERSION}
+          find node_modules/@emmercm/chdman-darwin-x64 -name "chdman" -type f -exec cp {} ../../macos/x86_64/chdman \;
+          chmod +x ../../macos/x86_64/chdman
+          cd .. && echo "✅ macos/x86_64/chdman"
 
-          npm install @emmercm/chdman-win32-x64@${VERSION}
-          cp node_modules/@emmercm/chdman-win32-x64/chdman.exe windows/x86_64/chdman.exe
-          echo "✅ windows/x86_64/chdman.exe"
+          # Windows x64
+          mkdir pkg_win_x64 && cd pkg_win_x64
+          npm init -y
+          npm install --force --ignore-scripts @emmercm/chdman-win32-x64@${VERSION}
+          find node_modules/@emmercm/chdman-win32-x64 -name "chdman.exe" -type f -exec cp {} ../../windows/x86_64/chdman.exe \;
+          cd .. && echo "✅ windows/x86_64/chdman.exe"
 
-          rm -rf node_modules package-lock.json package.json
+          cd .. && rm -rf tmp_chdman
 
       - name: Update versions.json
         env:
