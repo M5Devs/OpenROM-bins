@@ -127,20 +127,20 @@ jobs:
               BASE_XISO="$BASE_URL/XboxDev/extract-xiso/releases/download/${VERSION}"
 
               wget -q "$BASE_XISO/extract-xiso_Linux.zip" -O xiso_linux.zip
-              unzip -q xiso_linux.zip
+              unzip -qo xiso_linux.zip
               cp extract-xiso linux/x86_64/extract-xiso && chmod +x linux/x86_64/extract-xiso
-              rm extract-xiso xiso_linux.zip
+              rm -f extract-xiso LICENSE.TXT xiso_linux.zip
 
               wget -q "$BASE_XISO/extract-xiso_macOS.zip" -O xiso_mac.zip
-              unzip -q xiso_mac.zip
+              unzip -qo xiso_mac.zip
               cp extract-xiso macos/arm64/extract-xiso && cp extract-xiso macos/x86_64/extract-xiso
               chmod +x macos/arm64/extract-xiso macos/x86_64/extract-xiso
-              rm extract-xiso xiso_mac.zip
+              rm -f extract-xiso LICENSE.TXT xiso_mac.zip
 
               wget -q "$BASE_XISO/extract-xiso-Win64_Release.zip" -O xiso_win.zip
-              unzip -q xiso_win.zip
+              unzip -qo xiso_win.zip
               cp extract-xiso.exe windows/x86_64/extract-xiso.exe
-              rm extract-xiso.exe xiso_win.zip
+              rm -f extract-xiso.exe LICENSE.TXT xiso_win.zip
 
               echo "✅ extract-xiso updated"
               ;;
