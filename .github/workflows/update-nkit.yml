@@ -1,0 +1,82 @@
+name: Update NKit Binaries
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'NKit version (e.g., 2.1.0)'
+        required: true
+        default: '2.1.0'
+
+permissions:
+  contents: write
+
+jobs:
+  update-nkit:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout OpenROM-bins
+        uses: actions/checkout@v7
+
+      - name: Download NKit CLI binaries
+        run: |
+          BASE="https://github.com/Nanook/NKit/releases/download/v${{ github.event.inputs.version }}"
+          V="${{ github.event.inputs.version }}"
+
+          wget -q "$BASE/NKit_CLI_linux-x64_${V}.zip"
+          wget -q "$BASE/NKit_CLI_linux-arm64_${V}.zip"
+          wget -q "$BASE/NKit_CLI_macOS-AppleSilicon_${V}.zip"
+          wget -q "$BASE/NKit_CLI_macOS-Intel_${V}.zip"
+          wget -q "$BASE/NKit_CLI_win-x64_${V}.zip"
+
+          echo "✅ Downloaded all 5 ZIPs"
+
+      - name: Extract and place binaries
+        run: |
+          V="${{ github.event.inputs.version }}"
+
+          # Clean old nkit folders
+          rm -rf linux/x86_64/nkit linux/arm64/nkit \
+                 macos/arm64/nkit macos/x86_64/nkit \
+                 windows/x86_64/nkit
+
+          # Extract
+          mkdir -p linux/x86_64/nkit  && unzip -q "NKit_CLI_linux-x64_${V}.zip"             -d linux/x86_64/nkit/
+          mkdir -p linux/arm64/nkit   && unzip -q "NKit_CLI_linux-arm64_${V}.zip"            -d linux/arm64/nkit/
+          mkdir -p macos/arm64/nkit   && unzip -q "NKit_CLI_macOS-AppleSilicon_${V}.zip"     -d macos/arm64/nkit/
+          mkdir -p macos/x86_64/nkit  && unzip -q "NKit_CLI_macOS-Intel_${V}.zip"            -d macos/x86_64/nkit/
+          mkdir -p windows/x86_64/nkit && unzip -q "NKit_CLI_win-x64_${V}.zip"              -d windows/x86_64/nkit/
+
+          # Fix permissions
+          chmod +x linux/x86_64/nkit/nkit  linux/x86_64/nkit/nkds
+          chmod +x linux/arm64/nkit/nkit   linux/arm64/nkit/nkds
+          chmod +x macos/arm64/nkit/nkit   macos/arm64/nkit/nkds
+          chmod +x macos/x86_64/nkit/nkit  macos/x86_64/nkit/nkds
+
+          echo "✅ Extracted all platforms"
+
+      - name: Update versions.json
+        run: |
+          V="${{ github.event.inputs.version }}"
+          python3 -c "
+          import json
+          with open('versions.json', 'r') as f:
+              data = json.load(f)
+          data['nkit'] = '$V'
+          with open('versions.json', 'w') as f:
+              json.dump(data, f, indent=2)
+          print('✅ versions.json updated')
+          "
+
+      - name: Commit and push
+        run: |
+          V="${{ github.event.inputs.version }}"
+          git config user.email "ci@github.com"
+          git config user.name "GitHub CI"
+          git add -f linux/x86_64/nkit/ linux/arm64/nkit/ \
+                     macos/arm64/nkit/ macos/x86_64/nkit/ \
+                     windows/x86_64/nkit/ versions.json
+          git commit -m "chore: update NKit to v${V}"
+          git push origin main
+          echo "✅ Pushed to main"
