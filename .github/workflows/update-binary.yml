@@ -146,9 +146,9 @@ jobs:
               rm -f extract-xiso LICENSE.TXT xiso_mac.zip
 
               wget -q "$BASE_XISO/extract-xiso-Win64_Release.zip" -O xiso_win.zip
-              7z e xiso_win.zip extract-xiso.exe -y -o./
-              cp extract-xiso.exe windows/x86_64/extract-xiso.exe
-              rm -f extract-xiso.exe xiso_win.zip
+              7z x xiso_win.zip -o./xiso_win_tmp/ -y
+              find ./xiso_win_tmp -name "extract-xiso.exe" -exec cp {} windows/x86_64/extract-xiso.exe \;
+              rm -rf xiso_win.zip xiso_win_tmp
 
               echo "done"
               ;;
