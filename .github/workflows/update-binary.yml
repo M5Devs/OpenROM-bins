@@ -69,22 +69,27 @@ jobs:
             xdelta3)
               mkdir -p linux/x86_64 macos/x86_64 macos/arm64 windows/x86_64
 
-              wget -q "$BASE_URL/jmacd/xdelta/releases/download/v${VERSION}/xdelta3-${VERSION}-x86_64-linux.tar.gz" -O xdelta_linux.tar.gz
+              wget -q "$BASE_URL/jmacd/xdelta/releases/download/v${VERSION}/xdelta3-${VERSION}-linux-x86_64.tar.gz" -O xdelta_linux.tar.gz
               tar -xzf xdelta_linux.tar.gz
-              cp xdelta3 linux/x86_64/xdelta3
+              find . -maxdepth 2 -name "xdelta3" -not -name "*.tar.gz" -exec cp {} linux/x86_64/xdelta3 \;
               chmod +x linux/x86_64/xdelta3
+              rm -rf xdelta_linux.tar.gz xdelta3-${VERSION}-linux-x86_64
 
-              wget -q "$BASE_URL/jmacd/xdelta/releases/download/v${VERSION}/xdelta3-${VERSION}-x86_64-macosx.tar.gz" -O xdelta_mac.tar.gz
+              # macOS arm64 official binary
+              wget -q "$BASE_URL/jmacd/xdelta/releases/download/v${VERSION}/xdelta3-${VERSION}-macos-arm64.tar.gz" -O xdelta_mac.tar.gz
               tar -xzf xdelta_mac.tar.gz
-              cp xdelta3 macos/x86_64/xdelta3
-              cp xdelta3 macos/arm64/xdelta3
-              chmod +x macos/x86_64/xdelta3 macos/arm64/xdelta3
+              find . -maxdepth 2 -name "xdelta3" -not -name "*.tar.gz" -exec cp {} macos/arm64/xdelta3 \;
+              chmod +x macos/arm64/xdelta3
+              # macOS x86_64 — use arm64 binary via Rosetta (no official x86_64 build in 3.2.0)
+              cp macos/arm64/xdelta3 macos/x86_64/xdelta3
+              chmod +x macos/x86_64/xdelta3
+              rm -rf xdelta_mac.tar.gz xdelta3-${VERSION}-macos-arm64
 
-              wget -q "$BASE_URL/jmacd/xdelta/releases/download/v${VERSION}/xdelta3-${VERSION}-x86_64-win.zip" -O xdelta_win.zip
-              unzip -qo xdelta_win.zip
-              find . -maxdepth 1 -name "xdelta3*.exe" -exec cp {} windows/x86_64/xdelta3.exe \;
+              wget -q "$BASE_URL/jmacd/xdelta/releases/download/v${VERSION}/xdelta3-${VERSION}-windows-x86_64.zip" -O xdelta_win.zip
+              7z x xdelta_win.zip -o./xdelta_win_tmp/ -y
+              find ./xdelta_win_tmp -name "xdelta3*.exe" -exec cp {} windows/x86_64/xdelta3.exe \;
+              rm -rf xdelta_win.zip xdelta_win_tmp
 
-              rm -rf xdelta_linux.tar.gz xdelta_mac.tar.gz xdelta_win.zip xdelta3 xdelta3.exe
               echo "done"
               ;;
 
