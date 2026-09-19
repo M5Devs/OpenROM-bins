@@ -1,0 +1,84 @@
+name: Check Windows Binary Versions
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check-versions:
+    name: Check Windows Binary Versions
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout OpenROM-bins
+        uses: actions/checkout@v7
+
+      - name: Check binary versions
+        shell: pwsh
+        run: |
+          $bins = @(
+            "windows\x86_64\chdman.exe",
+            "windows\x86_64\maxcso.exe",
+            "windows\x86_64\nodtool.exe",
+            "windows\x86_64\extract-xiso.exe",
+            "windows\x86_64\xdelta3.exe",
+            "windows\x86_64\ecm.exe",
+            "windows\x86_64\unecm.exe"
+          )
+
+          Write-Host "============================================================"
+          Write-Host "OpenROM-bins Windows Binary Version Report"
+          Write-Host "============================================================"
+
+          foreach ($bin in $bins) {
+            if (Test-Path $bin) {
+              $name = Split-Path $bin -Leaf
+
+              # Try --version flag
+              $ver = $null
+              try {
+                $ver = & ".\$bin" --version 2>&1 | Select-Object -First 1
+              } catch {}
+
+              # Try -version flag
+              if (-not $ver -or $ver -match "error|unknown|invalid") {
+                try {
+                  $ver = & ".\$bin" -version 2>&1 | Select-Object -First 1
+                } catch {}
+              }
+
+              # Try help output (some tools print version in help)
+              if (-not $ver -or $ver -match "error|unknown|invalid") {
+                try {
+                  $ver = & ".\$bin" 2>&1 | Select-Object -First 2
+                } catch {}
+              }
+
+              # Get file version from PE header
+              $fileVer = (Get-Item ".\$bin").VersionInfo.FileVersion
+              $prodVer = (Get-Item ".\$bin").VersionInfo.ProductVersion
+              $fileDesc = (Get-Item ".\$bin").VersionInfo.FileDescription
+
+              Write-Host ""
+              Write-Host "--- $name ---"
+              Write-Host "  CLI output : $ver"
+              Write-Host "  FileVersion: $fileVer"
+              Write-Host "  ProductVer : $prodVer"
+              Write-Host "  Description: $fileDesc"
+              Write-Host "  Size       : $([math]::Round((Get-Item ".\$bin").Length / 1KB, 1)) KB"
+            } else {
+              Write-Host "--- $(Split-Path $bin -Leaf) --- NOT FOUND"
+            }
+          }
+
+          Write-Host ""
+          Write-Host "============================================================"
+          Write-Host "NKit:"
+          if (Test-Path "windows\x86_64\nkit\nkit.exe") {
+            $ver = & ".\windows\x86_64\nkit\nkit.exe" --version 2>&1 | Select-Object -First 1
+            Write-Host "  nkit.exe CLI: $ver"
+            $fileVer = (Get-Item ".\windows\x86_64\nkit\nkit.exe").VersionInfo.FileVersion
+            Write-Host "  FileVersion : $fileVer"
+          } else {
+            Write-Host "  nkit.exe NOT FOUND"
+          }
+          Write-Host "============================================================"
