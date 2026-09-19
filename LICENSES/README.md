@@ -5,10 +5,10 @@ Each binary is subject to its own license:
 
 | Binary | License | Source |
 |--------|---------|--------|
-| chdman | BSD-3-Clause | https://github.com/mamedev/mame |
-| maxcso | ISC | https://github.com/unknownbrackets/maxcso |
-| ecm / unecm | MIT | https://github.com/kidoz/ecm |
-| xdelta3 | Apache 2.0 | https://github.com/jmacd/xdelta |
-| nodtool | MIT | https://github.com/nicowillis/nodtool |
-| extract-xiso | GPL v2 | https://github.com/XboxDev/extract-xiso |
-| nkit | MIT | https://github.com/Nanook/NKit |
+| chdman | GPL-2.0+ / BSD-3-Clause | [mamedev/mame](https://github.com/mamedev/mame) |
+| maxcso | ISC | [unknownbrackets/maxcso](https://github.com/unknownbrackets/maxcso) |
+| ecm / unecm | GPL-2.0 | [kidoz/ecm](https://github.com/kidoz/ecm) |
+| xdelta3 | Apache 2.0 | [jmacd/xdelta](https://github.com/jmacd/xdelta) |
+| nodtool | MIT or Apache-2.0 | [encounter/nod](https://github.com/encounter/nod) |
+| extract-xiso | BSD-4-Clause (Modified) | [XboxDev/extract-xiso](https://github.com/XboxDev/extract-xiso) |
+| nkit | MIT | [Nanook/NKit](https://github.com/Nanook/NKit) |
