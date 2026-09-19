@@ -29,7 +29,10 @@ jobs:
       - name: Checkout OpenROM-bins
         uses: actions/checkout@v7
 
-      - name: Download and install ${{ github.event.inputs.tool }}
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -q wget unzip p7zip-full
         env:
           TOOL: ${{ github.event.inputs.tool }}
           VERSION: ${{ github.event.inputs.version }}
@@ -138,9 +141,9 @@ jobs:
               rm -f extract-xiso LICENSE.TXT xiso_mac.zip
 
               wget -q "$BASE_XISO/extract-xiso-Win64_Release.zip" -O xiso_win.zip
-              unzip -qo xiso_win.zip
+              7z e xiso_win.zip extract-xiso.exe -y -o./
               cp extract-xiso.exe windows/x86_64/extract-xiso.exe
-              rm -f extract-xiso.exe LICENSE.TXT xiso_win.zip
+              rm -f extract-xiso.exe xiso_win.zip
 
               echo "✅ extract-xiso updated"
               ;;
