@@ -120,17 +120,27 @@ jobs:
               ;;
 
             # ── extract-xiso ──────────────────────────────────────────────────
+            # NOTE: version format is build-YYYYMMDDHHMM e.g. build-202609111233
             extract-xiso)
               mkdir -p linux/x86_64 macos/x86_64 macos/arm64 windows/x86_64
 
-              wget -q "$BASE_URL/XboxDev/extract-xiso/releases/download/${VERSION}/extract-xiso-linux-x64.zip" -O xiso_linux.zip
-              unzip -q xiso_linux.zip && cp extract-xiso linux/x86_64/extract-xiso && chmod +x linux/x86_64/extract-xiso && rm extract-xiso xiso_linux.zip
+              BASE_XISO="$BASE_URL/XboxDev/extract-xiso/releases/download/${VERSION}"
 
-              wget -q "$BASE_URL/XboxDev/extract-xiso/releases/download/${VERSION}/extract-xiso-macos-x64.zip" -O xiso_mac.zip
-              unzip -q xiso_mac.zip && cp extract-xiso macos/x86_64/extract-xiso && cp extract-xiso macos/arm64/extract-xiso && chmod +x macos/x86_64/extract-xiso macos/arm64/extract-xiso && rm extract-xiso xiso_mac.zip
+              wget -q "$BASE_XISO/extract-xiso_Linux.zip" -O xiso_linux.zip
+              unzip -q xiso_linux.zip
+              cp extract-xiso linux/x86_64/extract-xiso && chmod +x linux/x86_64/extract-xiso
+              rm extract-xiso xiso_linux.zip
 
-              wget -q "$BASE_URL/XboxDev/extract-xiso/releases/download/${VERSION}/extract-xiso-windows-x64.zip" -O xiso_win.zip
-              unzip -q xiso_win.zip && cp extract-xiso.exe windows/x86_64/extract-xiso.exe && rm extract-xiso.exe xiso_win.zip
+              wget -q "$BASE_XISO/extract-xiso_macOS.zip" -O xiso_mac.zip
+              unzip -q xiso_mac.zip
+              cp extract-xiso macos/arm64/extract-xiso && cp extract-xiso macos/x86_64/extract-xiso
+              chmod +x macos/arm64/extract-xiso macos/x86_64/extract-xiso
+              rm extract-xiso xiso_mac.zip
+
+              wget -q "$BASE_XISO/extract-xiso-Win64_Release.zip" -O xiso_win.zip
+              unzip -q xiso_win.zip
+              cp extract-xiso.exe windows/x86_64/extract-xiso.exe
+              rm extract-xiso.exe xiso_win.zip
 
               echo "✅ extract-xiso updated"
               ;;
