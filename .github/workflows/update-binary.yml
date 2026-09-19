@@ -95,20 +95,13 @@ jobs:
             nodtool)
               mkdir -p linux/x86_64 linux/arm64 macos/x86_64 macos/arm64 windows/x86_64
 
-              wget -q "$BASE_URL/encounter/nod/releases/download/v${VERSION}/nodtool-v${VERSION}-x86_64-unknown-linux-musl.zip" -O nod_linux_x64.zip
-              unzip -q nod_linux_x64.zip && cp nodtool linux/x86_64/nodtool && chmod +x linux/x86_64/nodtool && rm nodtool nod_linux_x64.zip
+              BASE_NOD="$BASE_URL/encounter/nod/releases/download/v${VERSION}"
 
-              wget -q "$BASE_URL/encounter/nod/releases/download/v${VERSION}/nodtool-v${VERSION}-aarch64-unknown-linux-musl.zip" -O nod_linux_arm64.zip
-              unzip -q nod_linux_arm64.zip && cp nodtool linux/arm64/nodtool && chmod +x linux/arm64/nodtool && rm nodtool nod_linux_arm64.zip
-
-              wget -q "$BASE_URL/encounter/nod/releases/download/v${VERSION}/nodtool-v${VERSION}-aarch64-apple-darwin.zip" -O nod_mac_arm64.zip
-              unzip -q nod_mac_arm64.zip && cp nodtool macos/arm64/nodtool && chmod +x macos/arm64/nodtool && rm nodtool nod_mac_arm64.zip
-
-              wget -q "$BASE_URL/encounter/nod/releases/download/v${VERSION}/nodtool-v${VERSION}-x86_64-apple-darwin.zip" -O nod_mac_x64.zip
-              unzip -q nod_mac_x64.zip && cp nodtool macos/x86_64/nodtool && chmod +x macos/x86_64/nodtool && rm nodtool nod_mac_x64.zip
-
-              wget -q "$BASE_URL/encounter/nod/releases/download/v${VERSION}/nodtool-v${VERSION}-x86_64-pc-windows-msvc.zip" -O nod_win.zip
-              unzip -q nod_win.zip && cp nodtool.exe windows/x86_64/nodtool.exe && rm nodtool.exe nod_win.zip
+              wget -q "$BASE_NOD/nodtool-linux-x86_64"    -O linux/x86_64/nodtool  && chmod +x linux/x86_64/nodtool
+              wget -q "$BASE_NOD/nodtool-linux-aarch64"   -O linux/arm64/nodtool   && chmod +x linux/arm64/nodtool
+              wget -q "$BASE_NOD/nodtool-macos-arm64"     -O macos/arm64/nodtool   && chmod +x macos/arm64/nodtool
+              wget -q "$BASE_NOD/nodtool-macos-x86_64"   -O macos/x86_64/nodtool  && chmod +x macos/x86_64/nodtool
+              wget -q "$BASE_NOD/nodtool-windows-x86_64.exe" -O windows/x86_64/nodtool.exe
 
               echo "✅ nodtool updated"
               ;;
