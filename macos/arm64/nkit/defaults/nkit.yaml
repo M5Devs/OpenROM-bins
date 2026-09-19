@@ -1,0 +1,296 @@
+# NKit Configuration File
+# Please read - https://github.com/Nanook/NKit/wiki/Usage for the most up to date documentation
+
+# This config file is yaml - https://www.tutorialspoint.com/yaml/yaml_basics.htm
+
+#v1.0 - First versioned config [in: now supports single value and list]
+#v1.1 - Added FixExtract task info
+#v1.2 - Updated to use $configPath$ and $userPath$ for better organization
+#v1.3 - Bundle-with-config approach: portable-first, consistent naming
+
+# NKit can use this config for base settings allowing them to be overridden with command line options
+# e.g.
+#  nkit file.iso -task convert
+#  nkit -cfg other.yaml "file name.iso"
+#  nkit -cfg n -task convert -in "file name.iso" -convert wbfs  #no config mode
+
+# All directories for config values can be relative or absolute. The following Keywords are supported:
+#     $appPath$       - path of the launched exe
+#     $configPath$    - config directory (portable mode: exe directory, user mode: user config directory)
+#     $userPath$      - user data directory for logs, scans, results
+#                       (portable mode: exe directory, user mode: user home directory)
+#     $task$          - task being performed
+#     $system$        - system being processed
+#     $date$          - Current date as yyyymmdd
+#     $timestamp$     - Current time as yyyymmddhhmmss
+
+# CONFIGURATION MODES:
+# - PORTABLE MODE (preferred): Config file next to executable (nkit.yaml)
+#   Everything in one directory - perfect for zip distributions, package managers
+# - SYSTEM MODE (fallback): Config in system directories when portable mode not available
+
+# -- GLOBAL CONFIGURATION -----------------------------------------------------------------------------------------
+
+# Function to perform 
+# Options: [convert, dedupe, expand, extract, fix, scan, verify, fixExtract]
+#     convert      : converts files to the format specified in the "sys:xxxx" section
+#     dedupe       : coming soon...
+#     expand       : expands files to full images
+#     extract      : extracts filesystem contents to subdirectory based on the input filename
+#     fix          : for supported systems, recovers files to fully expanded images 
+#     fixExtract   : for supported systems, extracts files used by the fix task to restore them to their original state
+#     scan         : analyze files and save xml blueprints of image layout and filesystems
+#     verify       : verify using internal image checksums, dats and nkit scans
+task: 
+
+# Input file or directory to process. Keywords and masks (* and ?) are supported.
+# Default: Nothing. Must be specified here, command line, or a file/directory dropped onto exe.
+# Example: Y:\Wii\*.nkit.gcz
+in: 
+
+# Output directory
+# Default: Blank (defaults to input directory)
+out: 
+
+# Rename output images to a matched dat entry
+# Options: [y, n]
+# Default: n
+outAsDatMatch: n
+
+# folders or archives of set dats
+dats:
+  redump: 
+  tosec: 
+  nointro: 
+
+# Limit processing to a specific system?
+# Options: See "sys:xxxx" sections below, where xxxx is the system name. Leave blank for all systems.
+# Default: Blank (defaults to all systems)
+system: 
+
+# Scan directories recursively?
+# Options: [y, n]
+# Default: y
+r: y
+
+# Scan archives?
+# Options: [y, n]
+# Default: y
+arc: y
+
+# Verify results?
+# Options: [y, n, datLookup]
+# Default: y
+v: y
+
+# Temporary working directory
+# Default: Blank (defaults to output directory)
+tmp: 
+
+# Deletes source file on successful processing and verify (convert/Expand) - does not apply to archives
+# Options: [y, n]
+# Default: n
+deleteProcessed: n
+
+# If the output file exists skip processing (convert/Expand)
+# Options: [y, n]
+# Default: n
+skipIfCompleted: n
+
+# Output directory to save full image scans
+# Default: $userPath$/nkit/scans/$system$/$task$
+# Notes:
+#  - Used for saving optional scans during tasks convert, expand, extract, dedupe, and fix
+#  - If the scan task does not have a specified output directory, then the scanOut path is used
+scanOut: $userPath$/nkit/scans/$system$/$task$
+
+# Directory to lookup scans for verifying 'in' files of the same name
+# Default: $userPath$/nkit/scans/$system$/$task$
+scanIn: $userPath$/nkit/scans/$system$/$task$
+
+# Logging levels
+# Options: [none, info, detail, error, debug]
+# Default: info
+consoleLevel: info
+logOutLevel: info
+
+# Directory to save log files
+# Default: $userPath$/nkit/logs/$date$_log.txt
+logOut: $userPath$/nkit/logs/$date$_log.txt
+
+# Save results to a summary file?
+# Options: [y, n]
+# Default: y
+results: y
+
+# Directory to save summary files
+# Default: $userPath$/nkit/logs/$system$_$task$_results.txt
+resultsOut: $userPath$/nkit/logs/$system$_$task$_results.txt
+
+# Maximum number of threads to use in parallel
+# Default: 4
+parallelism: 4
+
+# Dedupe configuration - format: <setName>:<shardSize>:<blockSize>:<auxMode>
+# All parts are optional. Examples:
+#   dedupe:                     - all defaults (system name, 50GiB shards, 64KiB blocks)
+#   dedupe: mySet               - custom set name, rest defaults
+#   dedupe: :100g:128k:n        - default set name, 100GiB shards, 128KiB blocks, no aux store
+#   dedupe: mySet:50g:64k:y     - all specified
+# Default: (empty = all defaults - no aux mode)
+dedupe:
+
+# -- SYSTEM SPECIFIC CONFIGURATION --------------------------------------------------------------------------------
+
+# nkit supports the following systems. The config items are to help read, verify and fix images
+# baseInPath   - if a file cannot be auto-detected for a certain system then any files in this path will be categorized toward the corresponding system
+# keys         - directory or zip/rar/7z/gzip arc mask. The Latest modified file is used where there are multiple matches
+#              - e.g. path/directoryOfWiiUkeyFiles   or   path/WiiUKeys*.zip
+# dat          - zip/rar/7z/gzip arc mask and/or dat mask. The Latest modified file is used where there are multiple matches
+#              - e.g. path/Dats/WiiDats *.zip/*.dat   or   path/directoryOfWiiDats/*.dat
+# fixInfo      - path to a yaml for systems that support the Fix task
+# fixFiles     - path to NKit recovery files (as used/created by nkit v1)
+# convert      - format params are ':' separated and are optional. See comments for help
+# extract      - format is flags:mask - flags are r=regex OR m=mask, i=case-insensitive (case sensitive if not set), f=forensic (extract image parts with addresses)
+#              - e.g. mi:*.txt|*.png  or  ri:^(.*\.txt|.*\.png)$
+# dedupe       - per-system override of the global dedupe setting. Format: <setName>:<shardSize>:<blockSize>:<auxMode>
+#              - Append :y as the 4th part to auto-create an aux store if one does not exist
+#              - If blank, uses the global dedupe setting above
+#              - e.g. wii:50g:64k:y
+# 1gmr         - path to a 1GMR YAML file for per-file routing during dedupe
+#              - Each input filename is matched against game entry regex patterns to route to per-game sets
+#              - e.g. $configPath$/1gmr/wii-games.1gmr.yaml
+
+sys:
+  xbox:
+    baseInPath: 
+    dat: $configPath$/dats/$system$/*.zip//*.dat
+    extract: ri:.*
+    convert: iso
+    #convert: cso:9:2k:4  #format:level(9):blockSize(2k):parallelism(4)
+    #convert: cso2:9:2k:4 #format:level(9):blockSize(2k):parallelism(4)
+    #convert: zso::16k:32 #format:level(ignored):blockSize(2k):parallelism(4)
+  xbox360:
+    baseInPath: 
+    dat: $configPath$/dats/$system$/*.zip//*.dat
+    extract: ri:.*
+    convert: iso
+    #convert: cso:9:2k:4  #format:level(9):blockSize(2k):parallelism(4)
+    #convert: cso2:9:2k:4 #format:level(9):blockSize(2k):parallelism(4)
+    #convert: zso::16k:32 #format:level(ignored):blockSize(2k):parallelism(4)
+  gamecube:
+    baseInPath: 
+    dat: $configPath$/dats/$system$/*.zip//*.dat     #remove *.zip// if dat is extracted
+    fixInfo: $configPath$/fix/fix_$system$.yaml
+    fixFiles: $configPath$/fix/$system$
+    extract: mi:*                #select all files - mask mode
+    #extract: ri:^(.*)$          #select all files - regex mode
+    convert: rvz:zstd:19:128k:16 #format:encoding(zstd):level(19):blockSize(128k):parallelism(16)
+    #convert: rvz:lzma:9:128k:16 #format:encoding:level(9):blockSize(128k):parallelism(16)
+    #convert: rvz:none:128k:4    #format:encoding:blockSize(128k):parallelism(4)
+    #convert: wbfs:y             #format:lossless(y)
+    #convert: ciso:y             #format:lossless(y)
+  wii:
+    dedupe:
+    1gmr:
+    baseInPath: 
+    dat: $configPath$/dats/$system$/*.zip//*.dat     #remove *.zip// if dat is extracted
+    fixInfo: $configPath$/fix/fix_$system$.yaml
+    fixFiles: $configPath$/fix/$system$
+    extract: mi:*                #select all files - mask mode
+    #extract: ri:^(.*)$          #select all files - regex mode
+    convert: rvz:zstd:19:128k:16 #format:encoding(zstd):level(19):blockSize(128k):parallelism(16)
+    #convert: rvz:lzma:9:128k:16 #format:encoding:level(9):blockSize(128k):parallelism(16)
+    #convert: rvz:none:128k:4    #format:encoding:blockSize(128k):parallelism(4)
+    #convert: wbfs:y             #format:lossless(y)
+    #convert: ciso:y             #format:lossless(y)
+  wiiu:
+    dedupe:
+    1gmr:
+    baseInPath: 
+    keys: $configPath$/keys/$system$/*.zip           #remove *.zip if using a directory of keys
+    dat: $configPath$/dats/$system$/*.zip//*.dat     #remove *.zip// if dat is extracted
+    extract: mi:*                #select all files - mask mode
+    #extract: ri:^(.*)$          #select all files - regex mode
+    convert: wux
+  ps1:
+    baseInPath: 
+    dat: $configPath$/dats/$system$/*.zip//*.dat     #remove *.zip// if dat is extracted
+    extract: mi:*                #select all files - mask mode
+    #extract: ri:^(.*)$          #select all files - regex mode
+    convert: cue                 #format:type(split):binaryType(bin):audioType(bin)
+    #convert: cue:joined         #format:type(split):binaryType(bin):audioType(bin)
+  ps2:
+    baseInPath: 
+    dat: $configPath$/dats/$system$/*.zip//*.dat     #remove *.zip// if dat is extracted
+    extract: mi:*                #select all files - mask mode
+    #extract: ri:^(.*)$          #select all files - regex mode
+    #ps2 format has 2 in 1. iso convert/cue format
+    convert: cso:9:16k:4/cue:split    #format:level(9):blockSize(16k):parallelism(4)/cue:split(or joined)
+    #convert: cso2:9:16k:4/cue:split  #format:level(9):blockSize(16k):parallelism(4)/cue:split(or joined)
+    #convert: zso::16k:4/cue:split    #format:level(ignored):blockSize(16k):parallelism(4)/cue:split(or joined)
+  ps3:
+    baseInPath: 
+    keys: $configPath$/keys/$system$/*.zip           #remove *.zip if using a directory of keys
+    dat: $configPath$/dats/$system$/*.zip//*.dat     #remove *.zip// if dat is extracted
+    fixInfo: $configPath$/fix/fix_ps3.yaml           #required to skip overlapped files - temp fix
+    fixFiles: $configPath$/fix/$system$              #ird files
+    extract: mi:*                #select all files - mask mode
+    #extract: ri:^(.*)$          #select all files - regex mode
+    convert: deciso
+    #convert: cso:9:16k:4        #format:level(9):blockSize(16k):parallelism(4)
+    #convert: cso2:9:16k:4       #format:level(9):blockSize(16k):parallelism(4)
+    #convert: zso::16k:4         #format:level(ignored):blockSize(16k):parallelism(4)
+  psp:
+    baseInPath: 
+    dat: $configPath$/dats/$system$/*.zip//*.dat     #remove *.zip// if dat is extracted
+    extract: mi:*                #select all files - mask mode
+    #extract: ri:^(.*)$          #select all files - regex mode
+    convert: cso:9:2k:4          #format:level(9):blockSize(2k):parallelism(4)
+    #convert: cso2:9:2k:4        #format:level(9):blockSize(2k):parallelism(4)
+    #convert: zso::2k:4          #format:level(ignored):blockSize(2k):parallelism(4)
+  dreamcast:
+    baseInPath: 
+    dat: $configPath$/dats/$system$/*.zip//*.dat     #remove *.zip// if dat is extracted
+    fixInfo: $configPath$/fix/fix_dreamcast.yaml     #required for accurate audio alignment
+    extract: mi:*                #select all files - mask mode
+    #extract: ri:^(.*)$          #select all files - regex mode
+    convert: cue                 #format(cue|gdi) - cue=redump, gdi=tosec
+  saturn:
+    baseInPath: 
+    dat: $configPath$/dats/$system$/*.zip//*.dat     #remove *.zip// if dat is extracted
+    extract: mi:*                #select all files - mask mode
+    #extract: ri:^(.*)$          #select all files - regex mode
+    convert: cue                 #format:type(split):binaryType(bin):audioType(bin)
+    #convert: cue:joined         #format:type(split):binaryType(bin):audioType(bin)
+  segaCd:
+    baseInPath: 
+    dat: $configPath$/dats/$system$/*.zip//*.dat     #remove *.zip// if dat is extracted
+    extract: mi:*                #select all files - mask mode
+    #extract: ri:^(.*)$          #select all files - regex mode
+    convert: cue                 #format:type(split):binaryType(bin):audioType(bin)
+    #convert: cue:joined         #format:type(split):binaryType(bin):audioType(bin)
+  cdi: 
+    baseInPath: 
+    dat: $configPath$/dats/$system$/*.zip//*.dat     #remove *.zip// if dat is extracted
+    extract: mi:*                #select all files - mask mode
+    #extract: ri:^(.*)$          #select all files - regex mode
+    convert: cue                 #format:type(split):binaryType(bin):audioType(bin)
+    #convert: cue:joined         #format:type(split):binaryType(bin):audioType(bin)
+  pcEngine:
+    baseInPath: 
+    dat: $configPath$/dats/$system$/*.zip//*.dat     #remove *.zip// if dat is extracted
+    extract: mi:*                #select all files - mask mode
+    #extract: ri:^(.*)$          #select all files - regex mode
+    convert: cue                 #format:type(split):binaryType(bin):audioType(bin)
+    #convert: cue:joined         #format:type(split):binaryType(bin):audioType(bin)
+  default:
+    baseInPath: 
+    dat: $configPath$/dats/$system$/*.zip//*.dat     #remove *.zip// if dat is extracted
+    extract: mi:*                #select all files - mask mode
+    #extract: ri:^(.*)$          #select all files - regex mode
+    convert: cue                 #format:type(split):binaryType(bin):audioType(bin)
+    #convert: cue:joined         #format:type(split):binaryType(bin):audioType(bin)
+    #convert: cso:9:2k:4         #format:level(9):blockSize(2k):parallelism(4)
+    #convert: cso2:9:2k:4        #format:level(9):blockSize(2k):parallelism(4)
+    #convert: zso:12:2k:4        #format:level(12):blockSize(2k):parallelism(4)
