@@ -152,8 +152,8 @@ jobs:
         run: |
           cd saturn-src
           cargo build --release --bin saturn-patcher
-          mkdir -p ../windows/x86_64
-          cp target/release/saturn-patcher.exe ../windows/x86_64/saturn-patcher.exe
+          New-Item -ItemType Directory -Force -Path ..\windows\x86_64 | Out-Null
+          Copy-Item target\release\saturn-patcher.exe ..\windows\x86_64\saturn-patcher.exe
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
