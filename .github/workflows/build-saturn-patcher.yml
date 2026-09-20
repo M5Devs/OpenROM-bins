@@ -1,1 +1,216 @@
+name: Build saturn-patcher
 
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag e.g. 0.1.0'
+        required: true
+        default: '0.1.0'
+
+permissions:
+  contents: write
+
+jobs:
+
+  # ── Linux x86_64 ──────────────────────────────────────────────────────────
+  build-linux-x64:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout OpenROM-bins
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - name: Install musl tools
+        run: sudo apt-get install -y -q musl-tools
+
+      - name: Clone saturn-patcher
+        run: git clone --depth 1 https://github.com/ralfguth/saturn-patcher-egui.git saturn-src
+
+      - name: Build CLI (static musl)
+        run: |
+          cd saturn-src
+          cargo build --release --bin saturn-patcher --target x86_64-unknown-linux-musl
+          mkdir -p ../linux/x86_64
+          cp target/x86_64-unknown-linux-musl/release/saturn-patcher ../linux/x86_64/saturn-patcher
+          chmod +x ../linux/x86_64/saturn-patcher
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: saturn-patcher-linux-x64
+          path: linux/x86_64/saturn-patcher
+          retention-days: 1
+
+  # ── Linux ARM64 ───────────────────────────────────────────────────────────
+  build-linux-arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout OpenROM-bins
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-musl
+
+      - name: Install musl tools
+        run: sudo apt-get install -y -q musl-tools
+
+      - name: Clone saturn-patcher
+        run: git clone --depth 1 https://github.com/ralfguth/saturn-patcher-egui.git saturn-src
+
+      - name: Build CLI (static musl)
+        run: |
+          cd saturn-src
+          cargo build --release --bin saturn-patcher --target aarch64-unknown-linux-musl
+          mkdir -p ../linux/arm64
+          cp target/aarch64-unknown-linux-musl/release/saturn-patcher ../linux/arm64/saturn-patcher
+          chmod +x ../linux/arm64/saturn-patcher
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: saturn-patcher-linux-arm64
+          path: linux/arm64/saturn-patcher
+          retention-days: 1
+
+  # ── macOS ARM64 ───────────────────────────────────────────────────────────
+  build-macos-arm64:
+    runs-on: macos-15
+    steps:
+      - name: Checkout OpenROM-bins
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Clone saturn-patcher
+        run: git clone --depth 1 https://github.com/ralfguth/saturn-patcher-egui.git saturn-src
+
+      - name: Build CLI
+        run: |
+          cd saturn-src
+          cargo build --release --bin saturn-patcher
+          mkdir -p ../macos/arm64
+          cp target/release/saturn-patcher ../macos/arm64/saturn-patcher
+          chmod +x ../macos/arm64/saturn-patcher
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: saturn-patcher-macos-arm64
+          path: macos/arm64/saturn-patcher
+          retention-days: 1
+
+  # ── macOS x86_64 ──────────────────────────────────────────────────────────
+  build-macos-x64:
+    runs-on: macos-15-intel
+    steps:
+      - name: Checkout OpenROM-bins
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Clone saturn-patcher
+        run: git clone --depth 1 https://github.com/ralfguth/saturn-patcher-egui.git saturn-src
+
+      - name: Build CLI
+        run: |
+          cd saturn-src
+          cargo build --release --bin saturn-patcher
+          mkdir -p ../macos/x86_64
+          cp target/release/saturn-patcher ../macos/x86_64/saturn-patcher
+          chmod +x ../macos/x86_64/saturn-patcher
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: saturn-patcher-macos-x64
+          path: macos/x86_64/saturn-patcher
+          retention-days: 1
+
+  # ── Windows x86_64 ────────────────────────────────────────────────────────
+  build-windows-x64:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout OpenROM-bins
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Clone saturn-patcher
+        run: git clone --depth 1 https://github.com/ralfguth/saturn-patcher-egui.git saturn-src
+
+      - name: Build CLI
+        run: |
+          cd saturn-src
+          cargo build --release --bin saturn-patcher
+          mkdir -p ../windows/x86_64
+          cp target/release/saturn-patcher.exe ../windows/x86_64/saturn-patcher.exe
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: saturn-patcher-windows-x64
+          path: windows/x86_64/saturn-patcher.exe
+          retention-days: 1
+
+  # ── Collect and commit ────────────────────────────────────────────────────
+  commit:
+    name: Commit all binaries
+    needs: [build-linux-x64, build-linux-arm64, build-macos-arm64, build-macos-x64, build-windows-x64]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout OpenROM-bins
+        uses: actions/checkout@v7
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Place binaries
+        run: |
+          mkdir -p linux/x86_64 linux/arm64 macos/arm64 macos/x86_64 windows/x86_64
+
+          cp artifacts/saturn-patcher-linux-x64/saturn-patcher   linux/x86_64/saturn-patcher
+          cp artifacts/saturn-patcher-linux-arm64/saturn-patcher  linux/arm64/saturn-patcher
+          cp artifacts/saturn-patcher-macos-arm64/saturn-patcher  macos/arm64/saturn-patcher
+          cp artifacts/saturn-patcher-macos-x64/saturn-patcher    macos/x86_64/saturn-patcher
+          cp artifacts/saturn-patcher-windows-x64/saturn-patcher.exe windows/x86_64/saturn-patcher.exe
+
+          chmod +x linux/x86_64/saturn-patcher linux/arm64/saturn-patcher \
+                   macos/arm64/saturn-patcher macos/x86_64/saturn-patcher
+
+      - name: Update versions.json
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          python3 -c "
+          import json
+          with open('versions.json') as f:
+              data = json.load(f)
+          data['saturn-patcher'] = '$VERSION'
+          with open('versions.json', 'w') as f:
+              json.dump(data, f, indent=2)
+          "
+
+      - name: Commit and push
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          git config user.email "ci@github.com"
+          git config user.name "GitHub CI"
+          git add -f linux/x86_64/saturn-patcher linux/arm64/saturn-patcher \
+                     macos/arm64/saturn-patcher macos/x86_64/saturn-patcher \
+                     windows/x86_64/saturn-patcher.exe versions.json
+          git commit -m "feat: add saturn-patcher v${VERSION} (SSP patch support)"
+          git push origin main
+          echo "✅ Done"
