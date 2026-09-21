@@ -72,7 +72,7 @@ jobs:
       - name: Commit and push
         run: |
           V="${{ github.event.inputs.version }}"
-          git config user.email "ci@github.com"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config user.name "GitHub CI"
           git add -f linux/x86_64/nkit/ linux/arm64/nkit/ \
                      macos/arm64/nkit/ macos/x86_64/nkit/ \
