@@ -102,7 +102,9 @@ jobs:
         run: |
           BINS=(
             "linux/arm64/chdman:chdman"
+            "linux/arm64/maxcso:maxcso"
             "linux/arm64/nodtool:nodtool"
+            "linux/arm64/extract-xiso:extract-xiso"
             "linux/arm64/xdelta3:xdelta3"
             "linux/arm64/ecm:ecm"
             "linux/arm64/unecm:unecm"
