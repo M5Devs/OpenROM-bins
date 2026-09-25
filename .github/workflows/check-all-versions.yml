@@ -24,7 +24,8 @@ jobs:
             @{ path="windows\x86_64\xdelta3.exe";      name="xdelta3"      },
             @{ path="windows\x86_64\ecm.exe";          name="ecm"          },
             @{ path="windows\x86_64\unecm.exe";        name="unecm"        },
-            @{ path="windows\x86_64\nkit\nkit.exe";    name="nkit"         }
+            @{ path="windows\x86_64\nkit\nkit.exe";    name="nkit"         },
+            @{ path="windows\x86_64\XGDTool.exe";     name="xgdtool"      }
           )
 
           Write-Host "========================================"
@@ -71,6 +72,7 @@ jobs:
             "linux/x86_64/ecm:ecm"
             "linux/x86_64/unecm:unecm"
             "linux/x86_64/nkit/nkit:nkit"
+            "linux/x86_64/XGDTool:xgdtool"
           )
 
           echo "========================================"
@@ -107,6 +109,7 @@ jobs:
             "linux/arm64/ecm:ecm"
             "linux/arm64/unecm:unecm"
             "linux/arm64/nkit/nkit:nkit"
+            "linux/arm64/XGDTool:xgdtool"
           )
 
           echo "========================================"

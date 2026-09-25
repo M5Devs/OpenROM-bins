@@ -6,5 +6,6 @@
   "xdelta3": "3.2.0",
   "ecm": "2.0.0",
   "extract-xiso": "build-202609111233",
-  "saturn-patcher": "0.1.0"
+  "saturn-patcher": "0.1.0",
+  "xgdtool": "1.0.0"
 }
