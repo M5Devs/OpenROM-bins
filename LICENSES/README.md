@@ -12,3 +12,4 @@ Each binary is subject to its own license:
 | nodtool | MIT or Apache-2.0 | [encounter/nod](https://github.com/encounter/nod) |
 | extract-xiso | BSD-4-Clause (Modified) | [XboxDev/extract-xiso](https://github.com/XboxDev/extract-xiso) |
 | nkit | MIT | [Nanook/NKit](https://github.com/Nanook/NKit) |
+| xgdtool | GPL-3.0 | [wiredopposite/XGDTool](https://github.com/wiredopposite/XGDTool) |
