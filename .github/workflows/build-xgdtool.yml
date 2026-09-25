@@ -1,0 +1,173 @@
+name: Build XGDTool
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag e.g. 1.0.0'
+        required: true
+        default: '1.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+
+  # ── Linux x86_64 ──────────────────────────────────────────────────────────
+  build-linux-x64:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout OpenROM-bins
+        uses: actions/checkout@v7
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y clang cmake make pkg-config \
+            liblz4-dev libzstd-dev libssl-dev libcurl4-openssl-dev
+
+      - name: Clone XGDTool
+        run: git clone --recursive https://github.com/wiredopposite/XGDTool.git
+
+      - name: Configure (CLI only)
+        run: |
+          cd XGDTool && mkdir build && cd build
+          cmake -DENABLE_GUI=OFF -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ ..
+
+      - name: Build
+        run: |
+          cd XGDTool/build
+          make -j$(nproc)
+
+      - name: Copy binary
+        run: |
+          mkdir -p linux/x86_64
+          cp XGDTool/build/XGDTool linux/x86_64/XGDTool
+          chmod +x linux/x86_64/XGDTool
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xgdtool-linux-x64
+          path: linux/x86_64/XGDTool
+          retention-days: 1
+
+  # ── Linux ARM64 ───────────────────────────────────────────────────────────
+  build-linux-arm64:
+    runs-on: ubuntu-22.04-arm
+    steps:
+      - name: Checkout OpenROM-bins
+        uses: actions/checkout@v7
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y clang cmake make pkg-config \
+            liblz4-dev libzstd-dev libssl-dev libcurl4-openssl-dev
+
+      - name: Clone XGDTool
+        run: git clone --recursive https://github.com/wiredopposite/XGDTool.git
+
+      - name: Configure (CLI only)
+        run: |
+          cd XGDTool && mkdir build && cd build
+          cmake -DENABLE_GUI=OFF -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ ..
+
+      - name: Build
+        run: |
+          cd XGDTool/build
+          make -j$(nproc)
+
+      - name: Copy binary
+        run: |
+          mkdir -p linux/arm64
+          cp XGDTool/build/XGDTool linux/arm64/XGDTool
+          chmod +x linux/arm64/XGDTool
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xgdtool-linux-arm64
+          path: linux/arm64/XGDTool
+          retention-days: 1
+
+  # ── Windows x86_64 ────────────────────────────────────────────────────────
+  build-windows-x64:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout OpenROM-bins
+        uses: actions/checkout@v7
+
+      - name: Clone XGDTool
+        run: git clone --recursive https://github.com/wiredopposite/XGDTool.git
+
+      - name: Configure (CLI only, no GUI)
+        run: |
+          cd XGDTool
+          mkdir build && cd build
+          cmake -S .. -B . -DENABLE_GUI=OFF -G "Visual Studio 17 2022" -A x64
+
+      - name: Build
+        run: |
+          cd XGDTool/build
+          cmake --build . --config Release
+
+      - name: Copy binary
+        run: |
+          mkdir -p windows/x86_64
+          copy XGDTool\build\Release\XGDTool.exe windows\x86_64\XGDTool.exe
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xgdtool-windows-x64
+          path: windows/x86_64/XGDTool.exe
+          retention-days: 1
+
+  # ── Collect and commit ────────────────────────────────────────────────────
+  commit:
+    name: Commit all binaries
+    needs: [build-linux-x64, build-linux-arm64, build-windows-x64]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout OpenROM-bins
+        uses: actions/checkout@v7
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Place binaries
+        run: |
+          mkdir -p linux/x86_64 linux/arm64 windows/x86_64
+
+          cp artifacts/xgdtool-linux-x64/XGDTool   linux/x86_64/XGDTool
+          cp artifacts/xgdtool-linux-arm64/XGDTool  linux/arm64/XGDTool
+          cp artifacts/xgdtool-windows-x64/XGDTool.exe windows/x86_64/XGDTool.exe
+
+          chmod +x linux/x86_64/XGDTool linux/arm64/XGDTool
+
+      - name: Update versions.json
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          python3 -c "
+          import json
+          with open('versions.json') as f:
+              data = json.load(f)
+          data['xgdtool'] = '$VERSION'
+          with open('versions.json', 'w') as f:
+              json.dump(data, f, indent=2)
+          "
+
+      - name: Commit
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          git config user.email "ci@github.com"
+          git config user.name "GitHub CI"
+          git add -f linux/x86_64/XGDTool linux/arm64/XGDTool \
+                     windows/x86_64/XGDTool.exe versions.json
+          git commit -m "feat: add XGDTool v${VERSION} binaries"
+          echo "Done"
