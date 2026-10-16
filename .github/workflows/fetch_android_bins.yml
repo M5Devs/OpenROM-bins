@@ -13,64 +13,73 @@ jobs:
       - name: Checkout OpenROM-bins
         uses: actions/checkout@v4
 
-      - name: Setup Target Directory & Cross-Compilers
+      - name: Setup Target Directory & Cross-Compiler
         run: |
           mkdir -p android/arm64-v8a
           sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu zlib1g-dev
+          sudo apt-get install -y gcc-aarch64-linux-gnu
 
-      # 1. سحب chdman (نسخة Static MUSL ARM64 الرسمية المضمونة)
-      - name: Fetch Static chdman (aarch64)
+      # 1. سحب chdman من حزمة emmercm الرسمية
+      - name: Fetch static chdman (ARM64)
         run: |
-          echo "⬇️ Fetching static musl chdman for ARM64..."
-          npm pack @emmercm/chdman-linux-musl-arm64-v8
-          tar -xzf emmercm-chdman-linux-musl-arm64-v8-*.tgz
+          echo "⬇️ Downloading @emmercm/chdman-linux-arm64..."
+          npm pack @emmercm/chdman-linux-arm64
+          tar -xzf emmercm-chdman-linux-arm64-*.tgz
           cp package/chdman android/arm64-v8a/chdman
           rm -rf package emmercm-*.tgz
 
-      # 2. بناء ecm و unecm بنظام Static للأندرويد
-      - name: Build static ecm & unecm (aarch64)
+      # 2. سحب maxcso من حزمة emmercm الرسمية
+      - name: Fetch static maxcso (ARM64)
         run: |
-          echo "🔨 Compiling ecm & unecm..."
+          echo "⬇️ Downloading @emmercm/maxcso-linux-arm64..."
+          npm pack @emmercm/maxcso-linux-arm64
+          tar -xzf emmercm-maxcso-linux-arm64-*.tgz
+          cp package/maxcso android/arm64-v8a/maxcso
+          rm -rf package emmercm-*.tgz
+
+      # 3. بناء ecm و unecm بـ Static C Compiler في ثواني
+      - name: Build static ecm & unecm (ARM64)
+        run: |
+          echo "🔨 Compiling static ecm & unecm..."
           git clone --depth 1 https://github.com/blit0/unecm.git /tmp/ecm_src
           aarch64-linux-gnu-gcc -O3 -static /tmp/ecm_src/ecm.c -o android/arm64-v8a/ecm
           aarch64-linux-gnu-gcc -O3 -static /tmp/ecm_src/unecm.c -o android/arm64-v8a/unecm
           rm -rf /tmp/ecm_src
 
-      # 3. بناء xdelta3 بنظام Static للأندرويد
-      - name: Build static xdelta3 (aarch64)
+      # 4. بناء xdelta3 بـ Static C Compiler
+      - name: Build static xdelta3 (ARM64)
         run: |
-          echo "🔨 Compiling xdelta3..."
+          echo "🔨 Compiling static xdelta3..."
           git clone --depth 1 https://github.com/jmacd/xdelta.git /tmp/xdelta_src
           cd /tmp/xdelta_src/xdelta3
           aarch64-linux-gnu-gcc -O3 -static xdelta3.c -o $GITHUB_WORKSPACE/android/arm64-v8a/xdelta3
           rm -rf /tmp/xdelta_src
 
-      # 4. نسخ nkit المتوافق بالفعل مع arm64
-      - name: Copy NKit (aarch64)
+      # 5. نسخ nkit المتوافق أصلاً مع ARM64
+      - name: Copy NKit (ARM64)
         run: |
           if [ -f "linux/arm64/nkit" ]; then
             cp linux/arm64/nkit android/arm64-v8a/nkit
           fi
 
-      # 5. تنظيف الصلاحيات وتوليد ملف Checksums المحدث
+      # 6. ضبط الصلاحيات والتحقق وإعادة توليد الـ Checksums
       - name: Finalize & Generate Checksums
         run: |
           chmod +x android/arm64-v8a/*
           rm -f android/arm64-v8a/.gitkeep
           
-          echo "📦 Acquired Android Binaries:"
+          echo "📦 Acquired Android ARM64 Binaries:"
           ls -lh android/arm64-v8a/
           
-          # فحص إن الملفات كلها ARM64
+          # فحص إن كل الملفات ARM64 فعلاً
           file android/arm64-v8a/*
           
-          # إعادة توليد البصمات لكامل الريبو
+          # إعادة توليد الهاشات لكامل مستودع الباينريز
           find windows linux macos android -type f \( -name "*.exe" -o ! -name "*.*" \) -exec sha256sum {} + | sort -k 2 > checksums.sha256
           sed -i 's/\r$//' checksums.sha256
 
-      # 6. الرفع التلقائي للريبو
+      # 7. الرفع التلقائي لفرع main
       - name: Commit and Push Android Binaries
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "feat(android): pack verified static ARM64-v8a binaries & update checksums"
+          commit_message: "feat(android): bundle pre-compiled ARM64-v8a native binaries & update checksums"
