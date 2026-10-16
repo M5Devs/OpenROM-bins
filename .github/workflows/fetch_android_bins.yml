@@ -1,0 +1,89 @@
+name: 🤖 Fetch & Pack Android ARM64 Binaries
+
+on:
+  workflow_dispatch: # زرار يدوي تدوس عليه يخلص الليلة فوراً
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-android-bins:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout OpenROM-bins
+        uses: actions/checkout@v4
+
+      - name: Install Extraction Utilities
+        run: sudo apt-get update && sudo apt-get install -y zstd binutils
+
+      - name: Setup Target Directory
+        run: mkdir -p android/arm64-v8a
+
+      # 1. تنزيل وفك chdman (من حزمة mame-tools لمعمارية aarch64)
+      - name: Fetch chdman (aarch64)
+        run: |
+          echo "⬇️ Downloading chdman..."
+          curl -sL "https://packages.termux.dev/apt/termux-main/pool/main/m/mame-tools/mame-tools_0.268_aarch64.deb" -o mame-tools.deb || true
+          if [ -f mame-tools.deb ]; then
+            ar x mame-tools.deb
+            tar -xf data.tar.* ./data/data/com.termux/files/usr/bin/chdman 2>/dev/null || tar -xf data.tar.*
+            find . -name "chdman" -type f -exec cp {} android/arm64-v8a/chdman \;
+            rm -rf mame-tools.deb data.tar.* control.tar.* debian-binary
+          fi
+
+      # 2. تنزيل وفك maxcso (aarch64)
+      - name: Fetch maxcso (aarch64)
+        run: |
+          echo "⬇️ Downloading maxcso..."
+          curl -sL "https://packages.termux.dev/apt/termux-main/pool/main/m/maxcso/maxcso_1.13.0-1_aarch64.deb" -o maxcso.deb || true
+          if [ -f maxcso.deb ]; then
+            ar x maxcso.deb
+            tar -xf data.tar.* ./data/data/com.termux/files/usr/bin/maxcso 2>/dev/null || tar -xf data.tar.*
+            find . -name "maxcso" -type f -exec cp {} android/arm64-v8a/maxcso \;
+            rm -rf maxcso.deb data.tar.* control.tar.* debian-binary
+          fi
+
+      # 3. تنزيل وفك xdelta3 (aarch64)
+      - name: Fetch xdelta3 (aarch64)
+        run: |
+          echo "⬇️ Downloading xdelta3..."
+          curl -sL "https://packages.termux.dev/apt/termux-main/pool/main/x/xdelta3/xdelta3_3.1.0-2_aarch64.deb" -o xdelta3.deb || true
+          if [ -f xdelta3.deb ]; then
+            ar x xdelta3.deb
+            tar -xf data.tar.* ./data/data/com.termux/files/usr/bin/xdelta3 2>/dev/null || tar -xf data.tar.*
+            find . -name "xdelta3" -type f -exec cp {} android/arm64-v8a/xdelta3 \;
+            rm -rf xdelta3.deb data.tar.* control.tar.* debian-binary
+          fi
+
+      # 4. تنزيل ecm / unecm (aarch64)
+      - name: Fetch ecm & unecm (aarch64)
+        run: |
+          echo "⬇️ Downloading ecm..."
+          curl -sL "https://packages.termux.dev/apt/termux-main/pool/main/e/ecm/ecm_1.03-1_aarch64.deb" -o ecm.deb || true
+          if [ -f ecm.deb ]; then
+            ar x ecm.deb
+            tar -xf data.tar.* 2>/dev/null || true
+            find . -name "ecm" -type f -exec cp {} android/arm64-v8a/ecm \;
+            find . -name "unecm" -type f -exec cp {} android/arm64-v8a/unecm \;
+            rm -rf ecm.deb data.tar.* control.tar.* debian-binary
+          fi
+
+      # 5. تنظيف الصلاحيات وتوليد ملف Checksums محدث
+      - name: Set Permissions & Re-generate Checksums
+        run: |
+          chmod +x android/arm64-v8a/* || true
+          rm -f android/arm64-v8a/.gitkeep
+          
+          # فحص أسماء الملفات التي تم تنزيلها
+          echo "📦 Android Binaries acquired:"
+          ls -la android/arm64-v8a/
+          
+          # إعادة توليد checksums.sha256 لكل الريبو بما فيه أندرويد
+          find windows linux macos android -type f \( -name "*.exe" -o ! -name "*.*" \) -exec sha256sum {} + | sort -k 2 > checksums.sha256
+          sed -i 's/\r$//' checksums.sha256
+
+      # 6. رفع التغييرات والباينريز إلى الفرع الرئيسي
+      - name: Commit and Push Android Binaries
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "feat(android): bundle pre-compiled ARM64-v8a native binaries & update checksums"
