@@ -13,14 +13,14 @@ jobs:
       - name: Checkout OpenROM-bins
         uses: actions/checkout@v4
 
-      - name: Setup Target Directory & Cross-Compiler
+      - name: Setup Target Directory & Tools
         run: |
           mkdir -p android/arm64-v8a
           sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
+          sudo apt-get install -y gcc-aarch64-linux-gnu tar curl
 
-      # 1. سحب chdman من حزمة emmercm الرسمية
-      - name: Fetch static chdman (ARM64)
+      # 1. سحب chdman ARM64
+      - name: Fetch static chdman
         run: |
           echo "⬇️ Downloading @emmercm/chdman-linux-arm64..."
           npm pack @emmercm/chdman-linux-arm64
@@ -28,8 +28,8 @@ jobs:
           cp package/dist/chdman android/arm64-v8a/chdman
           rm -rf package emmercm-*.tgz
 
-      # 2. سحب maxcso من حزمة emmercm الرسمية
-      - name: Fetch static maxcso (ARM64)
+      # 2. سحب maxcso ARM64
+      - name: Fetch static maxcso
         run: |
           echo "⬇️ Downloading @emmercm/maxcso-linux-arm64..."
           npm pack @emmercm/maxcso-linux-arm64
@@ -37,32 +37,33 @@ jobs:
           cp package/dist/maxcso android/arm64-v8a/maxcso
           rm -rf package emmercm-*.tgz
 
-      # 3. بناء ecm و unecm بـ Static C Compiler في ثواني
-      - name: Build static ecm & unecm (ARM64)
+      # 3. سحب xdelta3 ARM64 الرسمي من jmacd/xdelta
+      - name: Fetch official xdelta3 ARM64
+        run: |
+          echo "⬇️ Downloading official xdelta3 ARM64..."
+          curl -sL "https://github.com/jmacd/xdelta/releases/download/v3.2.2/xdelta3-3.2.2-linux-arm64.tar.gz" -o xdelta3.tar.gz
+          tar -xzf xdelta3.tar.gz
+          cp xdelta3 android/arm64-v8a/xdelta3
+          rm -rf xdelta3 xdelta3.tar.gz
+
+      # 4. بناء ecm و unecm من السورس كود المباشر
+      - name: Build static ecm & unecm
         run: |
           echo "🔨 Compiling static ecm & unecm..."
-          git clone --depth 1 https://github.com/blit0/unecm.git /tmp/ecm_src
-          aarch64-linux-gnu-gcc -O3 -static /tmp/ecm_src/ecm.c -o android/arm64-v8a/ecm
-          aarch64-linux-gnu-gcc -O3 -static /tmp/ecm_src/unecm.c -o android/arm64-v8a/unecm
-          rm -rf /tmp/ecm_src
+          curl -sL "https://raw.githubusercontent.com/alucryd/ecm-tools/master/src/ecm.c" -o /tmp/ecm.c
+          curl -sL "https://raw.githubusercontent.com/alucryd/ecm-tools/master/src/unecm.c" -o /tmp/unecm.c
+          aarch64-linux-gnu-gcc -O3 -static /tmp/ecm.c -o android/arm64-v8a/ecm
+          aarch64-linux-gnu-gcc -O3 -static /tmp/unecm.c -o android/arm64-v8a/unecm
+          rm -f /tmp/ecm.c /tmp/unecm.c
 
-      # 4. بناء xdelta3 بـ Static C Compiler
-      - name: Build static xdelta3 (ARM64)
-        run: |
-          echo "🔨 Compiling static xdelta3..."
-          git clone --depth 1 https://github.com/jmacd/xdelta.git /tmp/xdelta_src
-          cd /tmp/xdelta_src/xdelta3
-          aarch64-linux-gnu-gcc -O3 -static xdelta3.c -o $GITHUB_WORKSPACE/android/arm64-v8a/xdelta3
-          rm -rf /tmp/xdelta_src
-
-      # 5. نسخ nkit المتوافق أصلاً مع ARM64
-      - name: Copy NKit (ARM64)
+      # 5. نسخ NKit 3.1.0 ARM64
+      - name: Copy NKit
         run: |
           if [ -f "linux/arm64/nkit" ]; then
             cp linux/arm64/nkit android/arm64-v8a/nkit
           fi
 
-      # 6. ضبط الصلاحيات والتحقق وإعادة توليد الـ Checksums
+      # 6. فحص الملفات وتوليد الهاشات
       - name: Finalize & Generate Checksums
         run: |
           chmod +x android/arm64-v8a/*
@@ -70,16 +71,13 @@ jobs:
           
           echo "📦 Acquired Android ARM64 Binaries:"
           ls -lh android/arm64-v8a/
-          
-          # فحص إن كل الملفات ARM64 فعلاً
           file android/arm64-v8a/*
           
-          # إعادة توليد الهاشات لكامل مستودع الباينريز
           find windows linux macos android -type f \( -name "*.exe" -o ! -name "*.*" \) -exec sha256sum {} + | sort -k 2 > checksums.sha256
           sed -i 's/\r$//' checksums.sha256
 
-      # 7. الرفع التلقائي لفرع main
+      # 7. الرفع التلقائي
       - name: Commit and Push Android Binaries
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "feat(android): bundle pre-compiled ARM64-v8a native binaries & update checksums"
+          commit_message: "feat(android): bundle verified static ARM64-v8a binaries & update checksums"
