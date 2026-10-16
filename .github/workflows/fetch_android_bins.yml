@@ -48,15 +48,19 @@ jobs:
           find /tmp/xdelta_bin -type f -perm /111 -exec cp {} android/arm64-v8a/xdelta3 \; -quit || find /tmp/xdelta_bin -type f -exec cp {} android/arm64-v8a/xdelta3 \; -quit
           rm -rf /tmp/xdelta_bin /tmp/xdelta3.tar.gz
 
-      # 4. بناء ecm و unecm من السورس كود المباشر
+      # 4. بناء ecm و unecm من ريبو kidoz/ecm
       - name: Build static ecm & unecm
         run: |
-          echo "🔨 Compiling static ecm & unecm..."
-          curl -sL "https://raw.githubusercontent.com/alucryd/ecm-tools/master/src/ecm.c" -o /tmp/ecm.c
-          curl -sL "https://raw.githubusercontent.com/alucryd/ecm-tools/master/src/unecm.c" -o /tmp/unecm.c
-          aarch64-linux-gnu-gcc -O3 -static /tmp/ecm.c -o android/arm64-v8a/ecm
-          aarch64-linux-gnu-gcc -O3 -static /tmp/unecm.c -o android/arm64-v8a/unecm
-          rm -f /tmp/ecm.c /tmp/unecm.c
+          echo "🔨 Compiling static ecm & unecm from kidoz/ecm..."
+          git clone --depth 1 https://github.com/kidoz/ecm.git /tmp/ecm_src
+          # تدوير تلقائي على ecm.c و unecm.c وتجميعهم static لأندرويد
+          find /tmp/ecm_src -name "ecm.c" -exec aarch64-linux-gnu-gcc -O3 -static {} -o android/arm64-v8a/ecm \;
+          find /tmp/ecm_src -name "unecm.c" -exec aarch64-linux-gnu-gcc -O3 -static {} -o android/arm64-v8a/unecm \;
+          rm -rf /tmp/ecm_src
+          
+          # فحص أمان لو ملقاش ملفات ينسخ من لينكس
+          if [ ! -f "android/arm64-v8a/ecm" ]; then cp linux/arm64/ecm android/arm64-v8a/ecm; fi
+          if [ ! -f "android/arm64-v8a/unecm" ]; then cp linux/arm64/unecm android/arm64-v8a/unecm; fi
 
       # 5. نسخ NKit 3.1.0 ARM64
       - name: Copy NKit
