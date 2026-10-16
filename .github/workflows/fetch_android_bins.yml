@@ -37,14 +37,16 @@ jobs:
           cp package/dist/maxcso android/arm64-v8a/maxcso
           rm -rf package emmercm-*.tgz
 
-      # 3. سحب xdelta3 ARM64 الرسمي من jmacd/xdelta
+      # 3. سحب xdelta3 ARM64 الرسمي وتسميته مظبوط
       - name: Fetch official xdelta3 ARM64
         run: |
           echo "⬇️ Downloading official xdelta3 ARM64..."
-          curl -sL "https://github.com/jmacd/xdelta/releases/download/v3.2.2/xdelta3-3.2.2-linux-arm64.tar.gz" -o xdelta3.tar.gz
-          tar -xzf xdelta3.tar.gz
-          cp xdelta3 android/arm64-v8a/xdelta3
-          rm -rf xdelta3 xdelta3.tar.gz
+          curl -sL "https://github.com/jmacd/xdelta/releases/download/v3.2.2/xdelta3-3.2.2-linux-arm64.tar.gz" -o /tmp/xdelta3.tar.gz
+          mkdir -p /tmp/xdelta_bin
+          tar -xzf /tmp/xdelta3.tar.gz -C /tmp/xdelta_bin
+          # البحث عن الملف التنفيذي ونسخه باسمه الصريح
+          find /tmp/xdelta_bin -type f -perm /111 -exec cp {} android/arm64-v8a/xdelta3 \; -quit || find /tmp/xdelta_bin -type f -exec cp {} android/arm64-v8a/xdelta3 \; -quit
+          rm -rf /tmp/xdelta_bin /tmp/xdelta3.tar.gz
 
       # 4. بناء ecm و unecm من السورس كود المباشر
       - name: Build static ecm & unecm
