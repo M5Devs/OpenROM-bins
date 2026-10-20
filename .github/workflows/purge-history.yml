@@ -1,0 +1,45 @@
+name: Purge Binaries from Git History
+
+on:
+  workflow_dispatch: # تشغيل يدوي بروقان
+
+permissions:
+  contents: write
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Full History
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # مهم جداً يسحب كل تاريخ الكوميتات مش آخر كوميت بس
+
+      - name: Install git-filter-repo
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git-filter-repo
+
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Action"
+          git config user.email "action@github.com"
+
+      - name: Rewrite History (Delete OS folders completely)
+        run: |
+          # أمر الفلترة بيمسح الفولدرات دي من كل الكوميتات السابقة في التاريخ
+          git-filter-repo --invert-paths \
+            --path android \
+            --path linux \
+            --path macos \
+            --path windows \
+            --force
+
+      - name: Force Push Cleaned History
+        run: |
+          # أداة filter-repo بتمسح الـ remote للأمان، فبنرجع نضيفه بالتوكن بتاع جيت هاب
+          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          
+          # بنعمل force push للتاريخ الجديد النضيف
+          git push origin --force --all
+          git push origin --force --tags
