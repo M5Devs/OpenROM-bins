@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import shutil
 import subprocess
 import pytest
 
@@ -10,19 +11,23 @@ CHECKSUMS_PATH = os.path.join(REPO_ROOT, "checksums.sha256")
 VERSIONS_PATH = os.path.join(REPO_ROOT, "versions.json")
 
 def test_update_manifest_entry_script(tmp_path):
-    script_path = os.path.join(REPO_ROOT, "scripts", "update_manifest_entry.py")
+    # Copy repo files into isolated tmp_path
+    tmp_repo = tmp_path / "repo"
+    tmp_repo.mkdir()
+
+    shutil.copy(MANIFEST_PATH, tmp_repo / "manifest.json")
+    shutil.copy(CHECKSUMS_PATH, tmp_repo / "checksums.sha256")
+    shutil.copy(VERSIONS_PATH, tmp_repo / "versions.json")
+
+    scripts_dir = tmp_repo / "scripts"
+    scripts_dir.mkdir()
+    shutil.copy(os.path.join(REPO_ROOT, "scripts", "update_manifest_entry.py"), scripts_dir / "update_manifest_entry.py")
+    shutil.copy(os.path.join(REPO_ROOT, "scripts", "gen_checksums.py"), scripts_dir / "gen_checksums.py")
+
     dummy_sha = "1" * 64
 
-    # Backup original file contents
-    with open(MANIFEST_PATH, "rb") as f:
-        orig_manifest = f.read()
-    with open(CHECKSUMS_PATH, "rb") as f:
-        orig_checksums = f.read()
-    with open(VERSIONS_PATH, "rb") as f:
-        orig_versions = f.read()
-
     cmd = [
-        "python3", script_path,
+        "python3", str(scripts_dir / "update_manifest_entry.py"),
         "--tool", "saturn-patcher",
         "--os", "linux",
         "--arch", "x86_64",
@@ -38,30 +43,22 @@ def test_update_manifest_entry_script(tmp_path):
         "--build-flavor", "release"
     ]
 
-    try:
-        res = subprocess.run(cmd, capture_output=True, text=True)
-        assert res.returncode == 0, f"update_manifest_entry.py failed: {res.stderr}"
+    res = subprocess.run(cmd, cwd=tmp_repo, capture_output=True, text=True)
+    assert res.returncode == 0, f"update_manifest_entry.py failed: {res.stderr}"
 
-        with open(MANIFEST_PATH, "r", encoding="utf-8") as f:
-            updated_manifest = json.load(f)
+    with open(tmp_repo / "manifest.json", "r", encoding="utf-8") as f:
+        updated_manifest = json.load(f)
 
-        tool = updated_manifest["tools"]["saturn-patcher"]
-        assert tool["version"] == "0.2.0"
-        assert tool["source_ref"] == "v0.2.0"
-        assert tool["source_commit"] == "a" * 40
-        assert tool["toolchain"] == "rustc 1.85.0"
+    tool = updated_manifest["tools"]["saturn-patcher"]
+    assert tool["version"] == "0.2.0"
+    assert tool["source_ref"] == "v0.2.0"
+    assert tool["source_commit"] == "a" * 40
+    assert tool["toolchain"] == "rustc 1.85.0"
 
-        plat = tool["platforms"]["linux/x86_64"]
-        assert plat["sha256"] == dummy_sha
-        assert plat["size"] == 123456
-        assert plat["status"] == "ok"
-    finally:
-        with open(MANIFEST_PATH, "wb") as f:
-            f.write(orig_manifest)
-        with open(CHECKSUMS_PATH, "wb") as f:
-            f.write(orig_checksums)
-        with open(VERSIONS_PATH, "wb") as f:
-            f.write(orig_versions)
+    plat = tool["platforms"]["linux/x86_64"]
+    assert plat["sha256"] == dummy_sha
+    assert plat["size"] == 123456
+    assert plat["status"] == "ok"
 
 def test_workflow_input_validation_regexes():
     os_allowed = ["windows", "linux", "macos", "android"]
