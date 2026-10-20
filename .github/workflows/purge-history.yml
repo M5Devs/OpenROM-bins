@@ -1,7 +1,16 @@
+# ⚠️ WARNING: THIS WORKFLOW FORCE-PUSHES REWRITTEN GIT HISTORY.
+# IT PERMANENTLY REMOVES FILE PATHS FROM ALL COMMITS ACROSS THE REPOSITORY.
+# USE WITH EXTREME CAUTION AND ONLY WHEN PURGING ACCIDENTALLY COMMITTED BINARIES.
+
 name: Purge Binaries from Git History
 
 on:
-  workflow_dispatch: # تشغيل يدوي بروقان
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type PURGE to confirm force rewriting repository history"
+        required: true
+        default: ""
 
 permissions:
   contents: write
@@ -9,11 +18,21 @@ permissions:
 jobs:
   purge:
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
     steps:
+      - name: Validate Confirmation Input
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [ "$CONFIRM" != "PURGE" ]; then
+            echo "Error: Confirmation input must be exactly 'PURGE'" >&2
+            exit 1
+          fi
+
       - name: Checkout Full History
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # مهم جداً يسحب كل تاريخ الكوميتات مش آخر كوميت بس
+          fetch-depth: 0
 
       - name: Install git-filter-repo
         run: |
@@ -22,24 +41,14 @@ jobs:
 
       - name: Configure Git
         run: |
-          git config user.name "GitHub Action"
+          git config user.name "GitHub Action Bot"
           git config user.email "action@github.com"
 
       - name: Rewrite History (Delete OS folders completely)
         run: |
-          # أمر الفلترة بيمسح الفولدرات دي من كل الكوميتات السابقة في التاريخ
-          git-filter-repo --invert-paths \
+          git filter-repo --invert-paths \
             --path android \
             --path linux \
             --path macos \
             --path windows \
             --force
-
-      - name: Force Push Cleaned History
-        run: |
-          # أداة filter-repo بتمسح الـ remote للأمان، فبنرجع نضيفه بالتوكن بتاع جيت هاب
-          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
-          
-          # بنعمل force push للتاريخ الجديد النضيف
-          git push origin --force --all
-          git push origin --force --tags

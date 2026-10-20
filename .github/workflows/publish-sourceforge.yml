@@ -1,0 +1,317 @@
+name: Publish to SourceForge
+
+on:
+  workflow_call:
+    inputs:
+      os:
+        required: true
+        type: string
+        description: "Target OS e.g. linux, windows, macos, android"
+      arch:
+        required: true
+        type: string
+        description: "Target Arch e.g. x86_64, arm64, arm64-v8a"
+      tool:
+        required: true
+        type: string
+        description: "Tool canonical key e.g. chdman, nkit, xgdtool"
+      artifact_name:
+        required: true
+        type: string
+        description: "GitHub Actions artifact name containing the binary"
+      version:
+        required: false
+        type: string
+        description: "Version of the tool e.g. 1.0.0"
+      source_ref:
+        required: false
+        type: string
+        description: "Git tag or ref built"
+      source_commit:
+        required: false
+        type: string
+        description: "40-char git commit SHA"
+      toolchain:
+        required: false
+        type: string
+        description: "Compiler/toolchain version"
+      build_flavor:
+        required: false
+        type: string
+        description: "Build flavor e.g. nativeaot"
+      dry_run:
+        required: false
+        type: boolean
+        default: true
+        description: "Dry run mode (default true)"
+
+  workflow_dispatch:
+    inputs:
+      os:
+        required: true
+        type: choice
+        options:
+          - windows
+          - linux
+          - macos
+          - android
+      arch:
+        required: true
+        type: choice
+        options:
+          - x86_64
+          - arm64
+          - arm64-v8a
+      tool:
+        required: true
+        type: string
+      artifact_name:
+        required: true
+        type: string
+      version:
+        required: false
+        type: string
+      source_ref:
+        required: false
+        type: string
+      source_commit:
+        required: false
+        type: string
+      toolchain:
+        required: false
+        type: string
+      build_flavor:
+        required: false
+        type: string
+      dry_run:
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  publish:
+    name: Publish ${ inputs.tool } (${ inputs.os }/${ inputs.arch })
+    runs-on: ubuntu-22.04
+    concurrency:
+      group: publish-${ inputs.os }-${ inputs.arch }-${ inputs.tool }
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Validate Inputs via Allowlist Regex
+        env:
+          IN_OS: ${ inputs.os }
+          IN_ARCH: ${ inputs.arch }
+          IN_TOOL: ${ inputs.tool }
+          IN_ARTIFACT: ${ inputs.artifact_name }
+          IN_VERSION: ${ inputs.version }
+          IN_SOURCE_REF: ${ inputs.source_ref }
+          IN_SOURCE_COMMIT: ${ inputs.source_commit }
+          IN_BUILD_FLAVOR: ${ inputs.build_flavor }
+        run: |
+          python3 -c '
+          import os, sys, re
+
+          env = os.environ
+          os_val = env.get("IN_OS", "")
+          arch_val = env.get("IN_ARCH", "")
+          tool_val = env.get("IN_TOOL", "")
+          artifact_val = env.get("IN_ARTIFACT", "")
+          commit_val = env.get("IN_SOURCE_COMMIT", "")
+
+          if os_val not in ["windows", "linux", "macos", "android"]:
+              sys.exit("Invalid OS: " + os_val)
+          if arch_val not in ["x86_64", "arm64", "arm64-v8a"]:
+              sys.exit("Invalid Arch: " + arch_val)
+          if not re.match(r"^[a-z0-9-]+$", tool_val):
+              sys.exit("Invalid Tool name: " + tool_val)
+          if not re.match(r"^[A-Za-z0-9._-]+$", artifact_val):
+              sys.exit("Invalid Artifact name: " + artifact_val)
+          if commit_val and not re.match(r"^[0-9a-fA-F]{40}$", commit_val):
+              sys.exit("Invalid source_commit: " + commit_val)
+          print("Inputs validated successfully.")
+          '
+
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${ inputs.artifact_name }
+          path: download_artifact
+
+      - name: Verify Binary & Single-File Rules
+        env:
+          TOOL: ${ inputs.tool }
+          TARGET_OS: ${ inputs.os }
+          TARGET_ARCH: ${ inputs.arch }
+        run: |
+          python3 -c '
+          import os, sys, glob, hashlib
+
+          tool = os.environ["TOOL"].lower()
+          os_name = os.environ["TARGET_OS"]
+          arch_name = os.environ["TARGET_ARCH"]
+
+          files = [f for f in glob.glob("download_artifact/**", recursive=True) if os.path.isfile(f)]
+          if not files:
+              sys.exit("No files found in downloaded artifact!")
+
+          print("Artifact files found:")
+          for f in files:
+              size = os.path.getsize(f)
+              sha = hashlib.sha256(open(f, "rb").read()).hexdigest()
+              print(f"  {f}: {size} bytes, sha256={sha}")
+
+          if tool == "nkit":
+              if len(files) != 1:
+                  sys.exit(f"NKit publish violation! Expected exactly 1 file, found {len(files)}")
+              filename = os.path.basename(files[0])
+              if filename not in ["nkit", "nkit.exe"]:
+                  sys.exit(f"NKit binary filename invalid: {filename}")
+          '
+
+      - name: Compute SHA-256 and Size for Published Files
+        id: compute
+        run: |
+          python3 -c '
+          import os, sys, glob, hashlib
+
+          files = [f for f in glob.glob("download_artifact/**", recursive=True) if os.path.isfile(f)]
+          target_file = files[0]
+          size = os.path.getsize(target_file)
+          sha256 = hashlib.sha256(open(target_file, "rb").read()).hexdigest()
+          filename = os.path.basename(target_file)
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"target_file={target_file}\n")
+              f.write(f"filename={filename}\n")
+              f.write(f"sha256={sha256}\n")
+              f.write(f"size={size}\n")
+          '
+
+      - name: Setup SSH for SourceForge Upload
+        env:
+          SF_USER: ${ secrets.SF_USER }
+          SF_SSH_PRIVATE_KEY: ${ secrets.SF_SSH_PRIVATE_KEY }
+        run: |
+          if [ -z "$SF_USER" ] || [ -z "$SF_SSH_PRIVATE_KEY" ]; then
+            echo "SSH secrets missing! SF_USER or SF_SSH_PRIVATE_KEY not set."
+            echo "::warning::SF_USER or SF_SSH_PRIVATE_KEY missing. Proceeding in dry-run mode if enabled."
+            exit 0
+          fi
+
+          mkdir -p ~/.ssh
+          echo "$SF_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          cp scripts/sourceforge_known_hosts ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Rsync to SourceForge (or Dry Run)
+        env:
+          SF_USER: ${ secrets.SF_USER }
+          TARGET_OS: ${ inputs.os }
+          TARGET_ARCH: ${ inputs.arch }
+          FILENAME: ${ steps.compute.outputs.filename }
+          TARGET_FILE: ${ steps.compute.outputs.target_file }
+          DRY_RUN: ${ inputs.dry_run }
+        run: |
+          REMOTE_DIR="/home/frs/project/openrom-binaries/$TARGET_OS/$TARGET_ARCH/"
+          RSYNC_FLAGS="-avP -e 'ssh -o StrictHostKeyChecking=yes -i ~/.ssh/id_ed25519'"
+
+          if [ "$DRY_RUN" = "true" ] || [ -z "$SF_USER" ]; then
+            echo "=== DRY RUN MODE ENABLED ==="
+            echo "Would upload $TARGET_FILE -> SourceForge:$REMOTE_DIR/$FILENAME"
+            if [ -n "$SF_USER" ]; then
+              eval rsync --dry-run $RSYNC_FLAGS "$TARGET_FILE" "$SF_USER@frs.sourceforge.net:$REMOTE_DIR/$FILENAME"
+            fi
+          else
+            echo "Uploading $TARGET_FILE -> SourceForge:$REMOTE_DIR/$FILENAME"
+            eval rsync $RSYNC_FLAGS "$TARGET_FILE" "$SF_USER@frs.sourceforge.net:$REMOTE_DIR/$FILENAME"
+          fi
+
+      - name: Update Manifest Entry
+        env:
+          TOOL: ${ inputs.tool }
+          TARGET_OS: ${ inputs.os }
+          TARGET_ARCH: ${ inputs.arch }
+          FILENAME: ${ steps.compute.outputs.filename }
+          SHA256: ${ steps.compute.outputs.sha256 }
+          SIZE: ${ steps.compute.outputs.size }
+          VERSION: ${ inputs.version }
+          SOURCE_REF: ${ inputs.source_ref }
+          SOURCE_COMMIT: ${ inputs.source_commit }
+          TOOLCHAIN: ${ inputs.toolchain }
+          BUILD_FLAVOR: ${ inputs.build_flavor }
+          RUN_URL: "${ github.server_url }/${ github.repository }/actions/runs/${ github.run_id }"
+        run: |
+          REL_PATH="$TARGET_OS/$TARGET_ARCH/$FILENAME"
+          NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          CMD="python3 scripts/update_manifest_entry.py \
+            --tool "$TOOL" \
+            --os "$TARGET_OS" \
+            --arch "$TARGET_ARCH" \
+            --file-path "$REL_PATH" \
+            --sha256 "$SHA256" \
+            --size "$SIZE" \
+            --built-at "$NOW" \
+            --workflow-run-url "$RUN_URL""
+
+          [ -n "$VERSION" ] && CMD="$CMD --version "$VERSION""
+          [ -n "$SOURCE_REF" ] && CMD="$CMD --source-ref "$SOURCE_REF""
+          [ -n "$SOURCE_COMMIT" ] && CMD="$CMD --source-commit "$SOURCE_COMMIT""
+          [ -n "$TOOLCHAIN" ] && CMD="$CMD --toolchain "$TOOLCHAIN""
+          [ -n "$BUILD_FLAVOR" ] && CMD="$CMD --build-flavor "$BUILD_FLAVOR""
+
+          eval $CMD
+
+      - name: Validate Manifest
+        run: python3 scripts/validate_manifest.py
+
+      - name: Write Step Summary
+        env:
+          TOOL: ${ inputs.tool }
+          TARGET_OS: ${ inputs.os }
+          TARGET_ARCH: ${ inputs.arch }
+          FILENAME: ${ steps.compute.outputs.filename }
+          SHA256: ${ steps.compute.outputs.sha256 }
+          SIZE: ${ steps.compute.outputs.size }
+          DRY_RUN: ${ inputs.dry_run }
+        run: |
+          cat << EOF >> $GITHUB_STEP_SUMMARY
+          ### 🚀 SourceForge Publish Summary
+          | Field | Value |
+          |---|---|
+          | **Tool** | \`$TOOL\` |
+          | **Target** | \`$TARGET_OS/$TARGET_ARCH\` |
+          | **Filename** | \`$FILENAME\` |
+          | **SHA-256** | \`$SHA256\` |
+          | **Size** | \`$SIZE\` bytes |
+          | **Dry Run** | \`$DRY_RUN\` |
+          EOF
+
+      - name: Open Pull Request for Manifest Updates
+        if: ${ inputs.dry_run == false }
+        env:
+          GH_TOKEN: ${ secrets.GITHUB_TOKEN }
+          TOOL: ${ inputs.tool }
+          TARGET_OS: ${ inputs.os }
+          TARGET_ARCH: ${ inputs.arch }
+        run: |
+          BRANCH_NAME="publish-$TOOL-$TARGET_OS-$TARGET_ARCH-${ github.run_id }"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH_NAME"
+          git add manifest.json checksums.sha256 versions.json
+          git commit -m "chore(publish): update manifest for $TOOL ($TARGET_OS/$TARGET_ARCH)"
+          git push origin "$BRANCH_NAME"
+          gh pr create \
+            --title "Publish $TOOL for $TARGET_OS/$TARGET_ARCH" \
+            --body "Automated publish update for $TOOL on $TARGET_OS/$TARGET_ARCH." \
+            --base main \
+            --head "$BRANCH_NAME"
