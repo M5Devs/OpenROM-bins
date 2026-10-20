@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       target_os:
-        description: 'Target OS'
+        description: "Target OS"
         required: true
         type: choice
         options:
@@ -13,7 +13,7 @@ on:
           - macos
           - android
       target_arch:
-        description: 'Architecture'
+        description: "Architecture"
         required: true
         type: choice
         options:
@@ -21,76 +21,117 @@ on:
           - arm64
           - arm64-v8a
       tool_name:
-        description: 'Tool Key in versions.json (e.g. chdman, maxcso)'
+        description: "Tool Key in manifest.json (e.g. maxcso, ecm)"
         required: true
         type: string
       binary_filename:
-        description: 'Binary Filename (e.g. chdman.exe or chdman)'
+        description: "Binary Filename (e.g. maxcso.exe or maxcso)"
         required: true
         type: string
       download_url:
-        description: 'Direct Download URL from upstream release'
+        description: "Direct Download URL (must be https on allowed domain)"
         required: true
         type: string
-      new_version:
-        description: 'New Version String (e.g. mame0290, 1.4.1)'
+      version:
+        description: "Tool version string"
         required: true
         type: string
+      expected_sha256:
+        description: "Optional expected SHA-256 for verification"
+        required: false
+        type: string
+      dry_run:
+        description: "Dry run mode"
+        type: boolean
+        required: false
+        default: true
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
-  update-and-deploy:
-    runs-on: ubuntu-latest
+  download-and-publish:
+    name: Download & Publish ${ inputs.tool_name } (${ inputs.target_os }/${ inputs.target_arch })
+    runs-on: ubuntu-22.04
+
     steps:
-      - name: Checkout Repository
+      - name: Checkout OpenROM-bins
         uses: actions/checkout@v4
 
-      - name: Install Dependencies
-        run: sudo apt-get update && sudo apt-get install -y sshpass rsync jq curl
-
-      - name: Download New Binary
-        run: |
-          mkdir -p temp_bin
-          echo "Downloading from: ${{ inputs.download_url }}"
-          curl -L -f -o "temp_bin/${{ inputs.binary_filename }}" "${{ inputs.download_url }}"
-          chmod +x "temp_bin/${{ inputs.binary_filename }}"
-
-      - name: Upload to SourceForge
+      - name: Validate Inputs & Domain Allowlist
         env:
-          SF_USER: ${{ secrets.SF_USER }}
-          SF_PASS: ${{ secrets.SF_PASS }}
+          TOOL: ${ inputs.tool_name }
+          FILENAME: ${ inputs.binary_filename }
+          URL: ${ inputs.download_url }
+          EXPECTED_SHA: ${ inputs.expected_sha256 }
         run: |
-          TARGET_DIR="/home/frs/project/openrom-binaries/${{ inputs.target_os }}/${{ inputs.target_arch }}/"
-          echo "Uploading to SourceForge: $TARGET_DIR"
-          sshpass -p "$SF_PASS" rsync -avP -e 'ssh -o StrictHostKeyChecking=no' \
-            "temp_bin/${{ inputs.binary_filename }}" \
-            $SF_USER@frs.sourceforge.net:"$TARGET_DIR"
+          python3 -c '
+          import os, sys, re
+          from urllib.parse import urlparse
 
-      - name: Update versions.json & checksums.sha256
+          tool = os.environ.get("TOOL", "").lower()
+          filename = os.environ.get("FILENAME", "")
+          url = os.environ.get("URL", "")
+          expected_sha = os.environ.get("EXPECTED_SHA", "")
+
+          if tool == "nkit":
+              sys.exit("Error: NKit binaries cannot be updated via update-binary.yml! Use build-nkit.yml.")
+
+          if not re.match(r"^[a-z0-9-]+$", tool):
+              sys.exit(f"Invalid tool_name format: {tool}")
+
+          if not re.match(r"^[A-Za-z0-9._-]+$", filename):
+              sys.exit(f"Invalid binary_filename format: {filename}")
+
+          if expected_sha and not re.match(r"^[0-9a-fA-F]{64}$", expected_sha):
+              sys.exit(f"Invalid expected_sha256 format: {expected_sha}")
+
+          parsed = urlparse(url)
+          if parsed.scheme != "https":
+              sys.exit("Error: download_url must use https scheme!")
+
+          allowed_domains = ["github.com", "objects.githubusercontent.com", "registry.npmjs.org"]
+          if parsed.netloc.lower() not in allowed_domains:
+              sys.exit(f"Error: domain {parsed.netloc} not in allowlist {allowed_domains}")
+
+          print("Inputs and domain allowlist validated successfully.")
+          '
+
+      - name: Download & Verify Binary
+        env:
+          URL: ${ inputs.download_url }
+          FILENAME: ${ inputs.binary_filename }
+          EXPECTED_SHA: ${ inputs.expected_sha256 }
         run: |
-          # 1. Update version in versions.json
-          jq '.["${{ inputs.tool_name }}"] = "${{ inputs.new_version }}"' versions.json > versions.tmp && mv versions.tmp versions.json
+          mkdir -p artifact_dir
+          curl --retry 5 -fL "$URL" -o "artifact_dir/$FILENAME"
 
-          # 2. Calculate new SHA256
-          NEW_HASH=$(sha256sum "temp_bin/${{ inputs.binary_filename }}" | awk '{print $1}')
-          REL_PATH="${{ inputs.target_os }}/${{ inputs.target_arch }}/${{ inputs.binary_filename }}"
-          
-          # 3. Replace or append hash in checksums.sha256
-          if grep -q "$REL_PATH" checksums.sha256; then
-            sed -i "s|.*  $REL_PATH|$NEW_HASH  $REL_PATH|" checksums.sha256
-          else
-            echo "$NEW_HASH  $REL_PATH" >> checksums.sha256
+          if [ -n "$EXPECTED_SHA" ]; then
+            ACTUAL_SHA=$(sha256sum "artifact_dir/$FILENAME" | awk '{print $1}')
+            if [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
+              echo "Error: SHA-256 mismatch!" >&2
+              echo "  Expected: $EXPECTED_SHA" >&2
+              echo "  Actual:   $ACTUAL_SHA" >&2
+              exit 1
+            fi
+            echo "Expected SHA-256 verified successfully."
           fi
-          
-          # Sort checksums cleanly
-          sort -k2 -o checksums.sha256 checksums.sha256
 
-      - name: Commit and Push Changes
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add versions.json checksums.sha256
-          git commit -m "chore: bump ${{ inputs.tool_name }} to ${{ inputs.new_version }} (${{ inputs.target_os }}/${{ inputs.target_arch }})"
-          git push origin main
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${ inputs.tool_name }-${ inputs.target_os }-${ inputs.target_arch }
+          path: artifact_dir/${ inputs.binary_filename }
+
+  publish:
+    needs: download-and-publish
+    uses: ./.github/workflows/publish-sourceforge.yml
+    with:
+      os: ${ inputs.target_os }
+      arch: ${ inputs.target_arch }
+      tool: ${ inputs.tool_name }
+      artifact_name: binary-${ inputs.tool_name }-${ inputs.target_os }-${ inputs.target_arch }
+      version: ${ inputs.version }
+      build_flavor: upstream-download
+      dry_run: ${ inputs.dry_run }
