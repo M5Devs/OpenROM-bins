@@ -1,0 +1,260 @@
+name: Build NKit (NativeAOT Single File)
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: "NKit git tag or commit SHA (e.g. v3.1.0)"
+        required: true
+        default: "v3.1.0"
+      dry_run:
+        description: "Dry run publish to SourceForge"
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  build:
+    name: Build NKit (${ matrix.target.os }/${ matrix.target.arch })
+    runs-on: ${ matrix.target.runner }
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - os: linux
+            arch: x86_64
+            runner: ubuntu-22.04
+            rid: linux-x64
+            binary_name: nkit
+          - os: linux
+            arch: arm64
+            runner: ubuntu-24.04-arm
+            rid: linux-arm64
+            binary_name: nkit
+          - os: macos
+            arch: arm64
+            runner: macos-15
+            rid: osx-arm64
+            binary_name: nkit
+          - os: macos
+            arch: x86_64
+            runner: macos-15-intel
+            rid: osx-x64
+            binary_name: nkit
+          - os: windows
+            arch: x86_64
+            runner: windows-2022
+            rid: win-x64
+            binary_name: nkit.exe
+
+    steps:
+      - name: Checkout OpenROM-bins
+        uses: actions/checkout@v4
+
+      - name: Validate source_ref Input
+        env:
+          REF: ${ inputs.source_ref }
+        run: |
+          python3 -c '
+          import os, sys, re
+          ref = os.environ.get("REF", "")
+          if not re.match(r"^[A-Za-z0-9._/-]+$", ref):
+              sys.exit("Invalid source_ref input: " + ref)
+          print("source_ref validated:", ref)
+          '
+
+      - name: Setup .NET SDK 10.0.x
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Clone NKit Repository
+        env:
+          REF: ${ inputs.source_ref }
+        run: |
+          git clone https://github.com/Nanook/NKit.git nkit_src
+          cd nkit_src
+          git checkout "$REF"
+          COMMIT_SHA=$(git rev-parse HEAD)
+          echo "SOURCE_COMMIT=$COMMIT_SHA" >> $GITHUB_ENV
+
+      - name: Apply NKit Patches
+        run: |
+          if [ -d "patches/nkit" ]; then
+            for patch in patches/nkit/*.patch; do
+              if [ -f "$patch" ]; then
+                echo "Applying patch: $patch"
+                git -C nkit_src apply "../$patch"
+              fi
+            done
+          fi
+
+      - name: Download & Inject GrindCore Native Libraries
+        run: |
+          python3 -c '
+          import urllib.request, json, zipfile, os, shutil
+          req = urllib.request.Request("https://api.github.com/repos/Nanook/GrindCore/releases/latest", headers={"User-Agent": "curl/8.5.0"})
+          with urllib.request.urlopen(req) as resp:
+              data = json.loads(resp.read().decode())
+              url = None
+              for asset in data.get("assets", []):
+                  if asset.get("name") == "grindcore.zip":
+                      url = asset.get("browser_download_url")
+                      break
+          if not url:
+              raise RuntimeError("grindcore.zip not found in latest GrindCore release")
+
+          print("Downloading GrindCore from:", url)
+          os.makedirs("/tmp/gc", exist_ok=True)
+          zip_path = "/tmp/gc/grindcore.zip"
+          with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "curl/8.5.0"})) as resp, open(zip_path, "wb") as f:
+              f.write(resp.read())
+
+          with zipfile.ZipFile(zip_path, "r") as z:
+              z.extractall("/tmp/gc/extracted")
+
+          rid = "${ matrix.target.rid }"
+          static_name = "GrindCore.lib" if "win-" in rid else "libGrindCore.a"
+          src_file = os.path.join("/tmp/gc/extracted", rid, "native", static_name)
+          if os.path.exists(src_file):
+              dest_dir = os.path.expanduser(f"~/.nuget/packages/grindcore/0.9.0/runtimes/{rid}/native")
+              os.makedirs(dest_dir, exist_ok=True)
+              shutil.copy(src_file, os.path.join(dest_dir, static_name))
+              print("Injected GrindCore static library successfully.")
+          else:
+              print("Warning: Static GrindCore lib not found at", src_file)
+          '
+
+      - name: Publish NKit with NativeAOT
+        run: |
+          cd nkit_src
+          dotnet publish NKitApp/NKitApp.csproj \
+            -c Release \
+            -r ${ matrix.target.rid } \
+            -p:PublishAot=true \
+            -p:InvariantGlobalization=true \
+            -p:StripSymbols=true \
+            -p:DebugType=none \
+            -p:IlcOptimizationPreference=Size \
+            -o publish_out
+
+      - name: Enforce NKit Single File & Clean Sibling Artifacts
+        run: |
+          cd nkit_src/publish_out
+          BIN_NAME="${ matrix.target.binary_name }"
+          mkdir -p ../../artifact_dir
+          cp "$BIN_NAME" "../../artifact_dir/$BIN_NAME"
+
+          FILES=$(ls -1 ../../artifact_dir)
+          NUM_FILES=$(echo "$FILES" | wc -l)
+          if [ "$NUM_FILES" -ne 1 ]; then
+            echo "Error: NKit artifact must contain exactly 1 file, found $NUM_FILES" >&2
+            exit 1
+          fi
+
+      - name: Ad-hoc Sign Executable (macOS only)
+        if: matrix.target.os == macos
+        run: |
+          codesign --force --deep --sign - nkit_src/artifact_dir/nkit
+          codesign -dv nkit_src/artifact_dir/nkit
+
+      - name: Standalone Smoke Test (No .NET Environment)
+        shell: bash
+        run: |
+          mkdir -p /tmp/nkit_smoke
+          cp nkit_src/artifact_dir/${ matrix.target.binary_name } /tmp/nkit_smoke/
+          cd /tmp/nkit_smoke
+
+          export DOTNET_ROOT=""
+          export PATH=$(echo "$PATH" | tr ":" "\n" | grep -v "dotnet" | tr "\n" ":")
+
+          BIN="./${ matrix.target.binary_name }"
+          chmod +x "$BIN"
+          echo "Running smoke test: $BIN --help"
+          OUT=$("$BIN" --help 2>&1)
+          if [ -z "$OUT" ]; then
+            echo "Error: NKit smoke test produced empty output!" >&2
+            exit 1
+          fi
+          echo "Smoke test passed output snippet:"
+          echo "$OUT" | head -n 10
+
+      - name: Upload NKit Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nkit-${ matrix.target.os }-${ matrix.target.arch }
+          path: nkit_src/artifact_dir/${ matrix.target.binary_name }
+
+  publish-linux-x64:
+    needs: build
+    uses: ./.github/workflows/publish-sourceforge.yml
+    with:
+      os: linux
+      arch: x86_64
+      tool: nkit
+      artifact_name: nkit-linux-x86_64
+      version: "3.1.0"
+      source_ref: ${ inputs.source_ref }
+      toolchain: ".NET SDK 10.0.x NativeAOT"
+      build_flavor: nativeaot
+      dry_run: ${ inputs.dry_run }
+
+  publish-linux-arm64:
+    needs: build
+    uses: ./.github/workflows/publish-sourceforge.yml
+    with:
+      os: linux
+      arch: arm64
+      tool: nkit
+      artifact_name: nkit-linux-arm64
+      version: "3.1.0"
+      source_ref: ${ inputs.source_ref }
+      toolchain: ".NET SDK 10.0.x NativeAOT"
+      build_flavor: nativeaot
+      dry_run: ${ inputs.dry_run }
+
+  publish-macos-arm64:
+    needs: build
+    uses: ./.github/workflows/publish-sourceforge.yml
+    with:
+      os: macos
+      arch: arm64
+      tool: nkit
+      artifact_name: nkit-macos-arm64
+      version: "3.1.0"
+      source_ref: ${ inputs.source_ref }
+      toolchain: ".NET SDK 10.0.x NativeAOT"
+      build_flavor: nativeaot
+      dry_run: ${ inputs.dry_run }
+
+  publish-macos-x64:
+    needs: build
+    uses: ./.github/workflows/publish-sourceforge.yml
+    with:
+      os: macos
+      arch: x86_64
+      tool: nkit
+      artifact_name: nkit-macos-x86_64
+      version: "3.1.0"
+      source_ref: ${ inputs.source_ref }
+      toolchain: ".NET SDK 10.0.x NativeAOT"
+      build_flavor: nativeaot
+      dry_run: ${ inputs.dry_run }
+
+  publish-windows-x64:
+    needs: build
+    uses: ./.github/workflows/publish-sourceforge.yml
+    with:
+      os: windows
+      arch: x86_64
+      tool: nkit
+      artifact_name: nkit-windows-x86_64
+      version: "3.1.0"
+      source_ref: ${ inputs.source_ref }
+      toolchain: ".NET SDK 10.0.x NativeAOT"
+      build_flavor: nativeaot
+      dry_run: ${ inputs.dry_run }

@@ -1,89 +1,66 @@
-name: 🤖 Fetch & Pack Android ARM64 Binaries
+name: Fetch Android ARM64 Binaries
 
 on:
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run mode"
+        type: boolean
+        required: false
+        default: true
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
-  fetch-android-bins:
+  fetch-and-verify:
+    name: Fetch & Verify Android ARM64 Binaries
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout OpenROM-bins
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Target Directory & Tools
+      - name: Setup Tools
         run: |
-          mkdir -p android/arm64-v8a
           sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu tar curl
+          sudo apt-get install -y gcc-aarch64-linux-gnu tar curl file
 
-      # 1. سحب chdman ARM64
       - name: Fetch static chdman
         run: |
-          echo "⬇️ Downloading @emmercm/chdman-linux-arm64..."
           npm pack @emmercm/chdman-linux-arm64
           tar -xzf emmercm-chdman-linux-arm64-*.tgz
-          cp package/dist/chdman android/arm64-v8a/chdman
+          mkdir -p artifact_dir
+          cp package/dist/chdman artifact_dir/chdman
           rm -rf package emmercm-*.tgz
 
-      # 2. سحب maxcso ARM64
-      - name: Fetch static maxcso
+      - name: Verify Android Static Linking
         run: |
-          echo "⬇️ Downloading @emmercm/maxcso-linux-arm64..."
-          npm pack @emmercm/maxcso-linux-arm64
-          tar -xzf emmercm-maxcso-linux-arm64-*.tgz
-          cp package/dist/maxcso android/arm64-v8a/maxcso
-          rm -rf package emmercm-*.tgz
+          python3 -c '
+          import subprocess, sys, glob
 
-      # 3. سحب xdelta3 ARM64 الرسمي وتسميته مظبوط
-      - name: Fetch official xdelta3 ARM64
-        run: |
-          echo "⬇️ Downloading official xdelta3 ARM64..."
-          curl -sL "https://github.com/jmacd/xdelta/releases/download/v3.2.2/xdelta3-3.2.2-linux-arm64.tar.gz" -o /tmp/xdelta3.tar.gz
-          mkdir -p /tmp/xdelta_bin
-          tar -xzf /tmp/xdelta3.tar.gz -C /tmp/xdelta_bin
-          # البحث عن الملف التنفيذي ونسخه باسمه الصريح
-          find /tmp/xdelta_bin -type f -perm /111 -exec cp {} android/arm64-v8a/xdelta3 \; -quit || find /tmp/xdelta_bin -type f -exec cp {} android/arm64-v8a/xdelta3 \; -quit
-          rm -rf /tmp/xdelta_bin /tmp/xdelta3.tar.gz
+          files = glob.glob("artifact_dir/*")
+          for f in files:
+              res = subprocess.check_output(["file", f]).decode()
+              print(f"File check for {f}: {res.strip()}")
+              if "statically linked" not in res and "static-pie" not in res:
+                  print(f"Warning: {f} is not explicitly statically linked!")
+          '
 
-      # 4. بناء ecm و unecm من ريبو kidoz/ecm
-      - name: Build static ecm & unecm
-        run: |
-          echo "🔨 Compiling static ecm & unecm from kidoz/ecm..."
-          git clone --depth 1 https://github.com/kidoz/ecm.git /tmp/ecm_src
-          # تدوير تلقائي على ecm.c و unecm.c وتجميعهم static لأندرويد
-          find /tmp/ecm_src -name "ecm.c" -exec aarch64-linux-gnu-gcc -O3 -static {} -o android/arm64-v8a/ecm \;
-          find /tmp/ecm_src -name "unecm.c" -exec aarch64-linux-gnu-gcc -O3 -static {} -o android/arm64-v8a/unecm \;
-          rm -rf /tmp/ecm_src
-          
-          # فحص أمان لو ملقاش ملفات ينسخ من لينكس
-          if [ ! -f "android/arm64-v8a/ecm" ]; then cp linux/arm64/ecm android/arm64-v8a/ecm; fi
-          if [ ! -f "android/arm64-v8a/unecm" ]; then cp linux/arm64/unecm android/arm64-v8a/unecm; fi
-
-      # 5. نسخ NKit 3.1.0 ARM64
-      - name: Copy NKit
-        run: |
-          if [ -f "linux/arm64/nkit" ]; then
-            cp linux/arm64/nkit android/arm64-v8a/nkit
-          fi
-
-      # 6. فحص الملفات وتوليد الهاشات
-      - name: Finalize & Generate Checksums
-        run: |
-          chmod +x android/arm64-v8a/*
-          rm -f android/arm64-v8a/.gitkeep
-          
-          echo "📦 Acquired Android ARM64 Binaries:"
-          ls -lh android/arm64-v8a/
-          file android/arm64-v8a/*
-          
-          find windows linux macos android -type f \( -name "*.exe" -o ! -name "*.*" \) -exec sha256sum {} + | sort -k 2 > checksums.sha256
-          sed -i 's/\r$//' checksums.sha256
-
-      # 7. الرفع التلقائي
-      - name: Commit and Push Android Binaries
-        uses: stefanzweifel/git-auto-commit-action@v5
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
         with:
-          commit_message: "feat(android): bundle verified static ARM64-v8a binaries & update checksums"
+          name: android-chdman
+          path: artifact_dir/chdman
+
+  publish-chdman:
+    needs: fetch-and-verify
+    uses: ./.github/workflows/publish-sourceforge.yml
+    with:
+      os: android
+      arch: arm64-v8a
+      tool: chdman
+      artifact_name: android-chdman
+      version: mame0289
+      build_flavor: same_as_linux_arm64
+      dry_run: ${ inputs.dry_run }

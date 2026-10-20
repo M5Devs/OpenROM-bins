@@ -1,0 +1,113 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OpenROM Binaries Manifest",
+  "type": "object",
+  "required": ["format_version", "tools"],
+  "additionalProperties": false,
+  "properties": {
+    "format_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "tools": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["version", "license", "upstream_repo", "provenance", "platforms"],
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "string",
+            "minLength": 1
+          },
+          "license": {
+            "type": "string",
+            "minLength": 1
+          },
+          "upstream_repo": {
+            "type": "string",
+            "format": "uri"
+          },
+          "provenance": {
+            "type": "string",
+            "enum": ["built-from-source", "upstream-release", "npm-package"]
+          },
+          "source_ref": {
+            "type": "string"
+          },
+          "source_commit": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{40}$"
+          },
+          "built_at": {
+            "type": "string"
+          },
+          "workflow_run_url": {
+            "type": "string"
+          },
+          "toolchain": {
+            "type": "string"
+          },
+          "patches": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["path", "sha256", "purpose"],
+              "properties": {
+                "path": { "type": "string" },
+                "sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+                "purpose": { "type": "string" }
+              }
+            }
+          },
+          "build_flavor": {
+            "type": "string"
+          },
+          "npm_package": {
+            "type": "string"
+          },
+          "dist_integrity": {
+            "type": "string"
+          },
+          "platforms": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "required": ["path", "sha256", "size", "executable", "status"],
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-fA-F]{64}$"
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "executable": {
+                  "type": "boolean"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["ok", "unverified", "mismatch"]
+                },
+                "version": {
+                  "type": "string"
+                },
+                "universal": {
+                  "type": "boolean"
+                },
+                "same_as": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

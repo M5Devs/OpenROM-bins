@@ -1,0 +1,52 @@
+diff --git a/NKit/NKit.csproj b/NKit/NKit.csproj
+index 5b81709..b5b2a29 100644
+--- a/NKit/NKit.csproj
++++ b/NKit/NKit.csproj
+@@ -1,7 +1,7 @@
+ ﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+-		<TargetFrameworks>net10.0;net8.0;netstandard2.1</TargetFrameworks>
++		<TargetFramework>net10.0</TargetFramework>
+		<AssemblyName>NKitLib</AssemblyName>
+		<LangVersion>latest</LangVersion>
+		<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+diff --git a/NKitCore/NKitCore.csproj b/NKitCore/NKitCore.csproj
+index d0b91d4..0771fa8 100644
+--- a/NKitCore/NKitCore.csproj
++++ b/NKitCore/NKitCore.csproj
+@@ -1,7 +1,7 @@
+ <Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+-		<TargetFrameworks>net48;netstandard2.1;net8.0;net10.0</TargetFrameworks>
++		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>disable</ImplicitUsings>
+		<Nullable>disable</Nullable>
+		<LangVersion>latest</LangVersion>
+diff --git a/NKitDataStore/NKitDataStore.csproj b/NKitDataStore/NKitDataStore.csproj
+index 822a416..e71c1b9 100644
+--- a/NKitDataStore/NKitDataStore.csproj
++++ b/NKitDataStore/NKitDataStore.csproj
+@@ -2,7 +2,7 @@
+
+   <PropertyGroup>
+     <OutputType>Library</OutputType>
+-    <TargetFrameworks>net10.0;net8.0;netstandard2.1</TargetFrameworks>
++    <TargetFramework>net10.0</TargetFramework>
+     <LangVersion>latest</LangVersion>
+     <ImplicitUsings>enable</ImplicitUsings>
+     <Nullable>enable</Nullable>
+diff --git a/NKitStream/NKitStream.csproj b/NKitStream/NKitStream.csproj
+index a77cec3..5bdc6ca 100644
+--- a/NKitStream/NKitStream.csproj
++++ b/NKitStream/NKitStream.csproj
+@@ -1,7 +1,7 @@
+ ﻿<Project Sdk="Microsoft.NET.Sdk">
+
+   <PropertyGroup>
+-    <TargetFrameworks>net10.0;net8.0;netstandard2.1</TargetFrameworks>
++    <TargetFramework>net10.0</TargetFramework>
+     <ImplicitUsings>enable</ImplicitUsings>
+     <Nullable>enable</Nullable>
+     <LangVersion>latest</LangVersion>

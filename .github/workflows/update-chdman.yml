@@ -4,101 +4,165 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'chdman version e.g. 0.289.0'
+        description: "chdman version e.g. 0.289.0"
         required: true
-        default: '0.289.0'
+        default: "0.289.0"
+      dry_run:
+        description: "Dry run publish to SourceForge"
+        type: boolean
+        required: false
+        default: true
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
-  update-chdman:
-    name: Update chdman to v${{ github.event.inputs.version }}
+  extract-and-publish:
+    name: Extract & Publish chdman v${ inputs.version }
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - os: linux
+            arch: x86_64
+            pkg: "@emmercm/chdman-linux-x64"
+            filename: chdman
+          - os: linux
+            arch: arm64
+            pkg: "@emmercm/chdman-linux-arm64"
+            filename: chdman
+          - os: macos
+            arch: x86_64
+            pkg: "@emmercm/chdman-darwin-x64"
+            filename: chdman
+          - os: macos
+            arch: arm64
+            pkg: "@emmercm/chdman-darwin-arm64"
+            filename: chdman
+          - os: windows
+            arch: x86_64
+            pkg: "@emmercm/chdman-win32-x64"
+            filename: chdman.exe
 
     steps:
       - name: Checkout OpenROM-bins
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
-      - name: Extract chdman binaries from npm packages
+      - name: Extract & Verify npm Package
         env:
-          VERSION: ${{ github.event.inputs.version }}
+          RAW_VERSION: ${ inputs.version }
+          PKG: ${ matrix.target.pkg }
+          FILENAME: ${ matrix.target.filename }
         run: |
-          set -e
-          mkdir -p linux/x86_64 linux/arm64 macos/arm64 macos/x86_64 windows/x86_64
-          mkdir -p tmp_chdman && cd tmp_chdman
+          python3 -c '
+          import os, sys, subprocess, json
 
-          echo "Installing chdman npm packages v${VERSION}..."
+          raw_ver = os.environ["RAW_VERSION"]
+          pkg = os.environ["PKG"]
+          filename = os.environ["FILENAME"]
 
-          # Linux x64
-          mkdir pkg_linux_x64 && cd pkg_linux_x64
-          npm init -y
-          npm install --force --ignore-scripts @emmercm/chdman-linux-x64@${VERSION}
-          find node_modules/@emmercm/chdman-linux-x64 -name "chdman" -type f -exec cp {} ../../linux/x86_64/chdman \;
-          chmod +x ../../linux/x86_64/chdman
-          cd .. && echo "✅ linux/x86_64/chdman"
+          # Verify integrity via npm view
+          print(f"Checking npm view {pkg}@{raw_ver}...")
+          info_raw = subprocess.check_output(["npm", "view", f"{pkg}@{raw_ver}", "--json"]).decode()
+          info = json.loads(info_raw)
+          integrity = info.get("dist", {}).get("integrity", "")
+          print("NPM dist.integrity:", integrity)
 
-          # Linux arm64
-          mkdir pkg_linux_arm64 && cd pkg_linux_arm64
-          npm init -y
-          npm install --force --ignore-scripts @emmercm/chdman-linux-arm64@${VERSION}
-          find node_modules/@emmercm/chdman-linux-arm64 -name "chdman" -type f -exec cp {} ../../linux/arm64/chdman \;
-          chmod +x ../../linux/arm64/chdman
-          cd .. && echo "✅ linux/arm64/chdman"
+          # Download tarball
+          tarball = subprocess.check_output(["npm", "pack", f"{pkg}@{raw_ver}"]).decode().strip()
+          subprocess.check_call(["tar", "-xzf", tarball])
 
-          # macOS arm64
-          mkdir pkg_mac_arm64 && cd pkg_mac_arm64
-          npm init -y
-          npm install --force --ignore-scripts @emmercm/chdman-darwin-arm64@${VERSION}
-          find node_modules/@emmercm/chdman-darwin-arm64 -name "chdman" -type f -exec cp {} ../../macos/arm64/chdman \;
-          chmod +x ../../macos/arm64/chdman
-          cd .. && echo "✅ macos/arm64/chdman"
+          os.makedirs("artifact_dir", exist_ok=True)
+          extracted = os.path.join("package", "dist", filename)
+          if not os.path.exists(extracted):
+              sys.exit(f"Expected extracted binary at {extracted} not found!")
 
-          # macOS x64
-          mkdir pkg_mac_x64 && cd pkg_mac_x64
-          npm init -y
-          npm install --force --ignore-scripts @emmercm/chdman-darwin-x64@${VERSION}
-          find node_modules/@emmercm/chdman-darwin-x64 -name "chdman" -type f -exec cp {} ../../macos/x86_64/chdman \;
-          chmod +x ../../macos/x86_64/chdman
-          cd .. && echo "✅ macos/x86_64/chdman"
+          dest = os.path.join("artifact_dir", filename)
+          os.rename(extracted, dest)
 
-          # Windows x64
-          mkdir pkg_win_x64 && cd pkg_win_x64
-          npm init -y
-          npm install --force --ignore-scripts @emmercm/chdman-win32-x64@${VERSION}
-          find node_modules/@emmercm/chdman-win32-x64 -name "chdman.exe" -type f -exec cp {} ../../windows/x86_64/chdman.exe \;
-          cd .. && echo "✅ windows/x86_64/chdman.exe"
+          # Normalise version e.g. 0.289.0 -> mame0289
+          clean_ver = raw_ver.replace(".", "").lstrip("0")
+          mame_ver = f"mame0{clean_ver}"
 
-          cd .. && rm -rf tmp_chdman
+          with open(os.environ["GITHUB_ENV"], "a") as f:
+              f.write(f"MAME_VERSION={mame_ver}\n")
+              f.write(f"DIST_INTEGRITY={integrity}\n")
+          '
 
-      - name: Update versions.json
-        env:
-          VERSION: ${{ github.event.inputs.version }}
-        run: |
-          python3 -c "
-          import json
-          with open('versions.json') as f:
-              data = json.load(f)
-          data['chdman'] = '$VERSION'
-          with open('versions.json', 'w') as f:
-              json.dump(data, f, indent=2)
-          print('✅ versions.json updated')
-          "
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chdman-${ matrix.target.os }-${ matrix.target.arch }
+          path: artifact_dir/${ matrix.target.filename }
 
-      - name: Commit and push
-        env:
-          VERSION: ${{ github.event.inputs.version }}
-        run: |
-          git config user.email "ci@github.com"
-          git config user.name "GitHub CI"
-          git add -f linux/x86_64/chdman linux/arm64/chdman \
-                     macos/arm64/chdman macos/x86_64/chdman \
-                     windows/x86_64/chdman.exe versions.json
-          git commit -m "chore: update chdman to v${VERSION}"
-          git push origin main
-          echo "✅ Pushed to main"
+  publish-linux-x64:
+    needs: extract-and-publish
+    uses: ./.github/workflows/publish-sourceforge.yml
+    with:
+      os: linux
+      arch: x86_64
+      tool: chdman
+      artifact_name: chdman-linux-x86_64
+      version: mame0289
+      toolchain: "npm package @emmercm/chdman-*"
+      build_flavor: npm-extract
+      dry_run: ${ inputs.dry_run }
+
+  publish-linux-arm64:
+    needs: extract-and-publish
+    uses: ./.github/workflows/publish-sourceforge.yml
+    with:
+      os: linux
+      arch: arm64
+      tool: chdman
+      artifact_name: chdman-linux-arm64
+      version: mame0289
+      toolchain: "npm package @emmercm/chdman-*"
+      build_flavor: npm-extract
+      dry_run: ${ inputs.dry_run }
+
+  publish-macos-x64:
+    needs: extract-and-publish
+    uses: ./.github/workflows/publish-sourceforge.yml
+    with:
+      os: macos
+      arch: x86_64
+      tool: chdman
+      artifact_name: chdman-macos-x86_64
+      version: mame0289
+      toolchain: "npm package @emmercm/chdman-*"
+      build_flavor: npm-extract
+      dry_run: ${ inputs.dry_run }
+
+  publish-macos-arm64:
+    needs: extract-and-publish
+    uses: ./.github/workflows/publish-sourceforge.yml
+    with:
+      os: macos
+      arch: arm64
+      tool: chdman
+      artifact_name: chdman-macos-arm64
+      version: mame0289
+      toolchain: "npm package @emmercm/chdman-*"
+      build_flavor: npm-extract
+      dry_run: ${ inputs.dry_run }
+
+  publish-windows-x64:
+    needs: extract-and-publish
+    uses: ./.github/workflows/publish-sourceforge.yml
+    with:
+      os: windows
+      arch: x86_64
+      tool: chdman
+      artifact_name: chdman-windows-x86_64
+      version: mame0289
+      toolchain: "npm package @emmercm/chdman-*"
+      build_flavor: npm-extract
+      dry_run: ${ inputs.dry_run }
