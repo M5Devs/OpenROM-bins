@@ -1,52 +1,93 @@
-name: Verify SourceForge Binaries Integrity
+name: Verify SourceForge Integrity
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * 0"
   push:
     paths:
-      - 'checksums.sha256'
+      - "manifest.json"
+  pull_request:
+    paths:
+      - "manifest.json"
+
+permissions:
+  contents: read
 
 jobs:
   verify:
+    name: Verify SourceForge Binaries Integrity
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Verify All SourceForge Mirrors
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify Binaries against Manifest
         run: |
-          BASE_URL="https://downloads.sourceforge.net/project/openrom-binaries"
-          FAILED=0
-          
-          echo "Starting integrity verification..."
-          
-          while read -r expected_hash file_path; do
-            [ -z "$file_path" ] && continue
-            
-            DIR=$(dirname "$file_path")
-            mkdir -p "test_downloads/$DIR"
-            
-            URL="$BASE_URL/$file_path"
-            echo "Checking: $file_path"
-            
-            # Download file
-            if curl -L -s -f -o "test_downloads/$file_path" "$URL"; then
-              ACTUAL_HASH=$(sha256sum "test_downloads/$file_path" | awk '{print $1}')
-              if [ "$expected_hash" = "$ACTUAL_HASH" ]; then
-                echo "✅ MATCH: $file_path"
-              else
-                echo "❌ HASH MISMATCH for $file_path! (Expected: $expected_hash, Got: $ACTUAL_HASH)"
-                FAILED=1
-              fi
-            else
-              echo "🚨 404 / FAILED DOWNLOAD for: $URL"
-              FAILED=1
-            fi
-          done < checksums.sha256
-          
-          if [ $FAILED -ne 0 ]; then
-            echo "Integrity verification failed for one or more files!"
-            exit 1
-          fi
-          
-          echo "🎉 All binaries on SourceForge verified successfully!"
+          python3 -c '
+          import json, urllib.request, hashlib, sys, os
+
+          BASE_URL = os.environ.get("OPENROM_BINS_BASE_URL", "https://downloads.sourceforge.net/project/openrom-binaries")
+          with open("manifest.json", "r", encoding="utf-8") as f:
+              manifest = json.load(f)
+
+          results = []
+          failed = False
+
+          tools = manifest.get("tools", {})
+          for tool_name, tool_data in tools.items():
+              platforms = tool_data.get("platforms", {})
+              for plat_key, plat_data in platforms.items():
+                  path = plat_data["path"]
+                  exp_sha = plat_data["sha256"]
+                  exp_size = plat_data.get("size", 0)
+                  url = f"{BASE_URL}/{path}"
+
+                  print(f"Checking {path} ...")
+                  try:
+                      req = urllib.request.Request(url, headers={"User-Agent": "curl/8.5.0"})
+                      with urllib.request.urlopen(req, timeout=30) as resp:
+                          data = resp.read()
+                          act_sha = hashlib.sha256(data).hexdigest()
+                          act_size = len(data)
+
+                          match_sha = (act_sha == exp_sha)
+                          match_size = (exp_size == 0 or act_size == exp_size)
+
+                          if match_sha and match_size:
+                              status = "✅ OK"
+                          else:
+                              status = "❌ MISMATCH"
+                              failed = True
+
+                          results.append((tool_name, plat_key, path, act_size, status))
+                  except Exception as err:
+                      results.append((tool_name, plat_key, path, 0, f"🚨 ERROR: {err}"))
+                      failed = True
+
+          summary_lines = [
+              "### 🔍 SourceForge Integrity Verification Report",
+              "| Tool | Platform | Path | Size (Bytes) | Status |",
+              "|---|---|---|---|---|"
+          ]
+          for t, p, path, sz, st in results:
+              summary_lines.append(f"| \`{t}\` | \`{p}\` | \`{path}\` | {sz} | {st} |")
+
+          summary_text = "\n".join(summary_lines) + "\n"
+          step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
+          if step_summary:
+              with open(step_summary, "a", encoding="utf-8") as f:
+                  f.write(summary_text)
+
+          print(summary_text)
+
+          if failed:
+              print("Integrity verification failed for one or more files!", file=sys.stderr)
+              sys.exit(1)
+          print("All binaries verified successfully!")
+          '
