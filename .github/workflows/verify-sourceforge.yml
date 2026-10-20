@@ -1,0 +1,52 @@
+name: Verify SourceForge Binaries Integrity
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'checksums.sha256'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Verify All SourceForge Mirrors
+        run: |
+          BASE_URL="https://downloads.sourceforge.net/project/openrom-binaries"
+          FAILED=0
+          
+          echo "Starting integrity verification..."
+          
+          while read -r expected_hash file_path; do
+            [ -z "$file_path" ] && continue
+            
+            DIR=$(dirname "$file_path")
+            mkdir -p "test_downloads/$DIR"
+            
+            URL="$BASE_URL/$file_path"
+            echo "Checking: $file_path"
+            
+            # Download file
+            if curl -L -s -f -o "test_downloads/$file_path" "$URL"; then
+              ACTUAL_HASH=$(sha256sum "test_downloads/$file_path" | awk '{print $1}')
+              if [ "$expected_hash" = "$ACTUAL_HASH" ]; then
+                echo "✅ MATCH: $file_path"
+              else
+                echo "❌ HASH MISMATCH for $file_path! (Expected: $expected_hash, Got: $ACTUAL_HASH)"
+                FAILED=1
+              fi
+            else
+              echo "🚨 404 / FAILED DOWNLOAD for: $URL"
+              FAILED=1
+            fi
+          done < checksums.sha256
+          
+          if [ $FAILED -ne 0 ]; then
+            echo "Integrity verification failed for one or more files!"
+            exit 1
+          fi
+          
+          echo "🎉 All binaries on SourceForge verified successfully!"
