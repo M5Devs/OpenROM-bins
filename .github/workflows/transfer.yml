@@ -1,7 +1,7 @@
 name: Transfer Binaries to SourceForge
 
 on:
-  workflow_dispatch: # زرار يدوي هتدوس عليه بنفسك وقت ما تحب
+  workflow_dispatch: # تشغيل يدوي بضغطة زرار من جيت هاب
 
 jobs:
   sync:
@@ -13,12 +13,12 @@ jobs:
       - name: Install Tools
         run: sudo apt-get update && sudo apt-get install -y sshpass rsync
 
-      - name: Sync Files to SourceForge
+      - name: Sync OS Folders to SourceForge
         env:
           SF_USER: ${{ secrets.SF_USER }}
           SF_PASS: ${{ secrets.SF_PASS }}
         run: |
+          # هنا بنحدد فقط الفولدرات الأربعة اللي عايزين ننقلها
           sshpass -p "$SF_PASS" rsync -avP -e 'ssh -o StrictHostKeyChecking=no' \
-            --exclude '.git*' \
-            --exclude '.github' \
-            ./ $SF_USER@frs.sourceforge.net:/home/frs/project/openrom-binaries/
+            android linux macos windows \
+            $SF_USER@frs.sourceforge.net:/home/frs/project/openrom-binaries/
