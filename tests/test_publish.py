@@ -6,20 +6,21 @@ import pytest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MANIFEST_PATH = os.path.join(REPO_ROOT, "manifest.json")
+CHECKSUMS_PATH = os.path.join(REPO_ROOT, "checksums.sha256")
+VERSIONS_PATH = os.path.join(REPO_ROOT, "versions.json")
 
 def test_update_manifest_entry_script(tmp_path):
-    # Copy current manifest to tmp_path
-    tmp_manifest = tmp_path / "manifest.json"
-    with open(MANIFEST_PATH, "r", encoding="utf-8") as f:
-        manifest_data = json.load(f)
-
-    with open(tmp_manifest, "w", encoding="utf-8") as f:
-        json.dump(manifest_data, f, indent=2)
-
     script_path = os.path.join(REPO_ROOT, "scripts", "update_manifest_entry.py")
     dummy_sha = "1" * 64
 
-    # Run update script
+    # Backup original file contents
+    with open(MANIFEST_PATH, "rb") as f:
+        orig_manifest = f.read()
+    with open(CHECKSUMS_PATH, "rb") as f:
+        orig_checksums = f.read()
+    with open(VERSIONS_PATH, "rb") as f:
+        orig_versions = f.read()
+
     cmd = [
         "python3", script_path,
         "--tool", "saturn-patcher",
@@ -36,10 +37,6 @@ def test_update_manifest_entry_script(tmp_path):
         "--toolchain", "rustc 1.85.0",
         "--build-flavor", "release"
     ]
-
-    # Temporarily override manifest path in REPO_ROOT for test
-    with open(MANIFEST_PATH, "rb") as f:
-        orig_content = f.read()
 
     try:
         res = subprocess.run(cmd, capture_output=True, text=True)
@@ -60,7 +57,11 @@ def test_update_manifest_entry_script(tmp_path):
         assert plat["status"] == "ok"
     finally:
         with open(MANIFEST_PATH, "wb") as f:
-            f.write(orig_content)
+            f.write(orig_manifest)
+        with open(CHECKSUMS_PATH, "wb") as f:
+            f.write(orig_checksums)
+        with open(VERSIONS_PATH, "wb") as f:
+            f.write(orig_versions)
 
 def test_workflow_input_validation_regexes():
     os_allowed = ["windows", "linux", "macos", "android"]
