@@ -338,10 +338,11 @@
       }
     },
     "unecm": {
-      "version": "0.0.0",
       "license": "GPL-2.0-only",
       "upstream_repo": "https://github.com/kidoz/ecm",
       "provenance": "upstream-release",
+      "version_alias_of": "ecm",
+      "note": "version taken from ecm (same upstream project)",
       "platforms": {
         "android/arm64-v8a": {
           "path": "android/arm64-v8a/unecm",

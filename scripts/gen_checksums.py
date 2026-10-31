@@ -16,7 +16,7 @@ def generate_files():
 
     tools = manifest.get("tools", {})
     for tool_name, tool_data in tools.items():
-        if "version" in tool_data:
+        if "version" in tool_data and not tool_data.get("version_alias_of"):
             versions_dict[tool_name] = tool_data["version"]
 
         platforms = tool_data.get("platforms", {})
