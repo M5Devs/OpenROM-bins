@@ -30,7 +30,7 @@ jobs:
 
       - name: Validate source_ref Input
         env:
-          REF: ${ inputs.source_ref }
+          REF: ${{ inputs.source_ref }}
         run: |
           python3 -c '
           import os, sys, re
@@ -48,7 +48,7 @@ jobs:
 
       - name: Clone XGDTool
         env:
-          REF: ${ inputs.source_ref }
+          REF: ${{ inputs.source_ref }}
         run: |
           git clone --recursive https://github.com/wiredopposite/XGDTool.git xgd_src
           cd xgd_src
@@ -82,8 +82,8 @@ jobs:
       arch: x86_64
       tool: xgdtool
       artifact_name: xgdtool-linux-x86_64
-      version: ${ inputs.version }
-      source_ref: ${ inputs.source_ref }
+      version: ${{ inputs.version }}
+      source_ref: ${{ inputs.source_ref }}
       toolchain: "GCC / CMake Linux"
       build_flavor: release
-      dry_run: ${ inputs.dry_run }
+      dry_run: ${{ inputs.dry_run }}

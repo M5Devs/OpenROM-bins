@@ -94,10 +94,10 @@ permissions:
 
 jobs:
   publish:
-    name: Publish ${ inputs.tool } (${ inputs.os }/${ inputs.arch })
+    name: Publish ${{ inputs.tool }} (${{ inputs.os }}/${{ inputs.arch }})
     runs-on: ubuntu-22.04
     concurrency:
-      group: publish-${ inputs.os }-${ inputs.arch }-${ inputs.tool }
+      group: publish-${{ inputs.os }}-${{ inputs.arch }}-${{ inputs.tool }}
       cancel-in-progress: false
 
     steps:
@@ -106,14 +106,14 @@ jobs:
 
       - name: Validate Inputs via Allowlist Regex
         env:
-          IN_OS: ${ inputs.os }
-          IN_ARCH: ${ inputs.arch }
-          IN_TOOL: ${ inputs.tool }
-          IN_ARTIFACT: ${ inputs.artifact_name }
-          IN_VERSION: ${ inputs.version }
-          IN_SOURCE_REF: ${ inputs.source_ref }
-          IN_SOURCE_COMMIT: ${ inputs.source_commit }
-          IN_BUILD_FLAVOR: ${ inputs.build_flavor }
+          IN_OS: ${{ inputs.os }}
+          IN_ARCH: ${{ inputs.arch }}
+          IN_TOOL: ${{ inputs.tool }}
+          IN_ARTIFACT: ${{ inputs.artifact_name }}
+          IN_VERSION: ${{ inputs.version }}
+          IN_SOURCE_REF: ${{ inputs.source_ref }}
+          IN_SOURCE_COMMIT: ${{ inputs.source_commit }}
+          IN_BUILD_FLAVOR: ${{ inputs.build_flavor }}
         run: |
           python3 -c '
           import os, sys, re
@@ -141,14 +141,14 @@ jobs:
       - name: Download Artifact
         uses: actions/download-artifact@v4
         with:
-          name: ${ inputs.artifact_name }
+          name: ${{ inputs.artifact_name }}
           path: download_artifact
 
       - name: Verify Binary & Single-File Rules
         env:
-          TOOL: ${ inputs.tool }
-          TARGET_OS: ${ inputs.os }
-          TARGET_ARCH: ${ inputs.arch }
+          TOOL: ${{ inputs.tool }}
+          TARGET_OS: ${{ inputs.os }}
+          TARGET_ARCH: ${{ inputs.arch }}
         run: |
           python3 -c '
           import os, sys, glob, hashlib
@@ -196,8 +196,8 @@ jobs:
 
       - name: Setup SSH for SourceForge Upload
         env:
-          SF_USER: ${ secrets.SF_USER }
-          SF_SSH_PRIVATE_KEY: ${ secrets.SF_SSH_PRIVATE_KEY }
+          SF_USER: ${{ secrets.SF_USER }}
+          SF_SSH_PRIVATE_KEY: ${{ secrets.SF_SSH_PRIVATE_KEY }}
         run: |
           if [ -z "$SF_USER" ] || [ -z "$SF_SSH_PRIVATE_KEY" ]; then
             echo "SSH secrets missing! SF_USER or SF_SSH_PRIVATE_KEY not set."
@@ -213,12 +213,12 @@ jobs:
 
       - name: Rsync to SourceForge (or Dry Run)
         env:
-          SF_USER: ${ secrets.SF_USER }
-          TARGET_OS: ${ inputs.os }
-          TARGET_ARCH: ${ inputs.arch }
-          FILENAME: ${ steps.compute.outputs.filename }
-          TARGET_FILE: ${ steps.compute.outputs.target_file }
-          DRY_RUN: ${ inputs.dry_run }
+          SF_USER: ${{ secrets.SF_USER }}
+          TARGET_OS: ${{ inputs.os }}
+          TARGET_ARCH: ${{ inputs.arch }}
+          FILENAME: ${{ steps.compute.outputs.filename }}
+          TARGET_FILE: ${{ steps.compute.outputs.target_file }}
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
           REMOTE_DIR="/home/frs/project/openrom-binaries/$TARGET_OS/$TARGET_ARCH/"
           RSYNC_FLAGS="-avP -e 'ssh -o StrictHostKeyChecking=yes -i ~/.ssh/id_ed25519'"
@@ -236,18 +236,18 @@ jobs:
 
       - name: Update Manifest Entry
         env:
-          TOOL: ${ inputs.tool }
-          TARGET_OS: ${ inputs.os }
-          TARGET_ARCH: ${ inputs.arch }
-          FILENAME: ${ steps.compute.outputs.filename }
-          SHA256: ${ steps.compute.outputs.sha256 }
-          SIZE: ${ steps.compute.outputs.size }
-          VERSION: ${ inputs.version }
-          SOURCE_REF: ${ inputs.source_ref }
-          SOURCE_COMMIT: ${ inputs.source_commit }
-          TOOLCHAIN: ${ inputs.toolchain }
-          BUILD_FLAVOR: ${ inputs.build_flavor }
-          RUN_URL: "${ github.server_url }/${ github.repository }/actions/runs/${ github.run_id }"
+          TOOL: ${{ inputs.tool }}
+          TARGET_OS: ${{ inputs.os }}
+          TARGET_ARCH: ${{ inputs.arch }}
+          FILENAME: ${{ steps.compute.outputs.filename }}
+          SHA256: ${{ steps.compute.outputs.sha256 }}
+          SIZE: ${{ steps.compute.outputs.size }}
+          VERSION: ${{ inputs.version }}
+          SOURCE_REF: ${{ inputs.source_ref }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+          TOOLCHAIN: ${{ inputs.toolchain }}
+          BUILD_FLAVOR: ${{ inputs.build_flavor }}
+          RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         run: |
           REL_PATH="$TARGET_OS/$TARGET_ARCH/$FILENAME"
           NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -275,13 +275,13 @@ jobs:
 
       - name: Write Step Summary
         env:
-          TOOL: ${ inputs.tool }
-          TARGET_OS: ${ inputs.os }
-          TARGET_ARCH: ${ inputs.arch }
-          FILENAME: ${ steps.compute.outputs.filename }
-          SHA256: ${ steps.compute.outputs.sha256 }
-          SIZE: ${ steps.compute.outputs.size }
-          DRY_RUN: ${ inputs.dry_run }
+          TOOL: ${{ inputs.tool }}
+          TARGET_OS: ${{ inputs.os }}
+          TARGET_ARCH: ${{ inputs.arch }}
+          FILENAME: ${{ steps.compute.outputs.filename }}
+          SHA256: ${{ steps.compute.outputs.sha256 }}
+          SIZE: ${{ steps.compute.outputs.size }}
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
           cat << EOF >> $GITHUB_STEP_SUMMARY
           ### 🚀 SourceForge Publish Summary
@@ -296,14 +296,14 @@ jobs:
           EOF
 
       - name: Open Pull Request for Manifest Updates
-        if: ${ inputs.dry_run == false }
+        if: ${{ inputs.dry_run == false }}
         env:
-          GH_TOKEN: ${ secrets.GITHUB_TOKEN }
-          TOOL: ${ inputs.tool }
-          TARGET_OS: ${ inputs.os }
-          TARGET_ARCH: ${ inputs.arch }
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TOOL: ${{ inputs.tool }}
+          TARGET_OS: ${{ inputs.os }}
+          TARGET_ARCH: ${{ inputs.arch }}
         run: |
-          BRANCH_NAME="publish-$TOOL-$TARGET_OS-$TARGET_ARCH-${ github.run_id }"
+          BRANCH_NAME="publish-$TOOL-$TARGET_OS-$TARGET_ARCH-${{ github.run_id }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH_NAME"

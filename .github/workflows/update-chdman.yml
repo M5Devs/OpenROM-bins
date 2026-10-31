@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   extract-and-publish:
-    name: Extract & Publish chdman v${ inputs.version }
+    name: Extract & Publish chdman v${{ inputs.version }}
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -57,9 +57,9 @@ jobs:
 
       - name: Extract & Verify npm Package
         env:
-          RAW_VERSION: ${ inputs.version }
-          PKG: ${ matrix.target.pkg }
-          FILENAME: ${ matrix.target.filename }
+          RAW_VERSION: ${{ inputs.version }}
+          PKG: ${{ matrix.target.pkg }}
+          FILENAME: ${{ matrix.target.filename }}
         run: |
           python3 -c '
           import os, sys, subprocess, json
@@ -99,8 +99,8 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: chdman-${ matrix.target.os }-${ matrix.target.arch }
-          path: artifact_dir/${ matrix.target.filename }
+          name: chdman-${{ matrix.target.os }}-${{ matrix.target.arch }}
+          path: artifact_dir/${{ matrix.target.filename }}
 
   publish-linux-x64:
     needs: extract-and-publish
@@ -113,7 +113,7 @@ jobs:
       version: mame0289
       toolchain: "npm package @emmercm/chdman-*"
       build_flavor: npm-extract
-      dry_run: ${ inputs.dry_run }
+      dry_run: ${{ inputs.dry_run }}
 
   publish-linux-arm64:
     needs: extract-and-publish
@@ -126,7 +126,7 @@ jobs:
       version: mame0289
       toolchain: "npm package @emmercm/chdman-*"
       build_flavor: npm-extract
-      dry_run: ${ inputs.dry_run }
+      dry_run: ${{ inputs.dry_run }}
 
   publish-macos-x64:
     needs: extract-and-publish
@@ -139,7 +139,7 @@ jobs:
       version: mame0289
       toolchain: "npm package @emmercm/chdman-*"
       build_flavor: npm-extract
-      dry_run: ${ inputs.dry_run }
+      dry_run: ${{ inputs.dry_run }}
 
   publish-macos-arm64:
     needs: extract-and-publish
@@ -152,7 +152,7 @@ jobs:
       version: mame0289
       toolchain: "npm package @emmercm/chdman-*"
       build_flavor: npm-extract
-      dry_run: ${ inputs.dry_run }
+      dry_run: ${{ inputs.dry_run }}
 
   publish-windows-x64:
     needs: extract-and-publish
@@ -165,4 +165,4 @@ jobs:
       version: mame0289
       toolchain: "npm package @emmercm/chdman-*"
       build_flavor: npm-extract
-      dry_run: ${ inputs.dry_run }
+      dry_run: ${{ inputs.dry_run }}

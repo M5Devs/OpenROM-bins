@@ -20,7 +20,7 @@ jobs:
 
       - name: Check tool versions & notify
         env:
-          GH_TOKEN: ${ secrets.GITHUB_TOKEN }
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python3 -c '
           import json, urllib.request, os, subprocess

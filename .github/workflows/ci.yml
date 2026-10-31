@@ -18,6 +18,13 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Forbid single-brace expressions
+        run: |
+          if grep -rnE '[$][{] ' .github/workflows; then
+            echo "::error::single-brace expression found; use the double-brace form"
+            exit 1
+          fi
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:

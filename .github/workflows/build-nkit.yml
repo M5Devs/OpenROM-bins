@@ -19,8 +19,8 @@ permissions:
 
 jobs:
   build:
-    name: Build NKit (${ matrix.target.os }/${ matrix.target.arch })
-    runs-on: ${ matrix.target.runner }
+    name: Build NKit (${{ matrix.target.os }}/${{ matrix.target.arch }})
+    runs-on: ${{ matrix.target.runner }}
     strategy:
       fail-fast: false
       matrix:
@@ -57,7 +57,7 @@ jobs:
 
       - name: Validate source_ref Input
         env:
-          REF: ${ inputs.source_ref }
+          REF: ${{ inputs.source_ref }}
         run: |
           python3 -c '
           import os, sys, re
@@ -74,7 +74,7 @@ jobs:
 
       - name: Clone NKit Repository
         env:
-          REF: ${ inputs.source_ref }
+          REF: ${{ inputs.source_ref }}
         run: |
           git clone https://github.com/Nanook/NKit.git nkit_src
           cd nkit_src
@@ -117,7 +117,7 @@ jobs:
           with zipfile.ZipFile(zip_path, "r") as z:
               z.extractall("/tmp/gc/extracted")
 
-          rid = "${ matrix.target.rid }"
+          rid = "${{ matrix.target.rid }}"
           static_name = "GrindCore.lib" if "win-" in rid else "libGrindCore.a"
           src_file = os.path.join("/tmp/gc/extracted", rid, "native", static_name)
           if os.path.exists(src_file):
@@ -134,7 +134,7 @@ jobs:
           cd nkit_src
           dotnet publish NKitApp/NKitApp.csproj \
             -c Release \
-            -r ${ matrix.target.rid } \
+            -r ${{ matrix.target.rid }} \
             -p:PublishAot=true \
             -p:InvariantGlobalization=true \
             -p:StripSymbols=true \
@@ -145,7 +145,7 @@ jobs:
       - name: Enforce NKit Single File & Clean Sibling Artifacts
         run: |
           cd nkit_src/publish_out
-          BIN_NAME="${ matrix.target.binary_name }"
+          BIN_NAME="${{ matrix.target.binary_name }}"
           mkdir -p ../../artifact_dir
           cp "$BIN_NAME" "../../artifact_dir/$BIN_NAME"
 
@@ -157,7 +157,7 @@ jobs:
           fi
 
       - name: Ad-hoc Sign Executable (macOS only)
-        if: matrix.target.os == macos
+        if: matrix.target.os == 'macos'
         run: |
           codesign --force --deep --sign - nkit_src/artifact_dir/nkit
           codesign -dv nkit_src/artifact_dir/nkit
@@ -166,13 +166,13 @@ jobs:
         shell: bash
         run: |
           mkdir -p /tmp/nkit_smoke
-          cp nkit_src/artifact_dir/${ matrix.target.binary_name } /tmp/nkit_smoke/
+          cp nkit_src/artifact_dir/${{ matrix.target.binary_name }} /tmp/nkit_smoke/
           cd /tmp/nkit_smoke
 
           export DOTNET_ROOT=""
           export PATH=$(echo "$PATH" | tr ":" "\n" | grep -v "dotnet" | tr "\n" ":")
 
-          BIN="./${ matrix.target.binary_name }"
+          BIN="./${{ matrix.target.binary_name }}"
           chmod +x "$BIN"
           echo "Running smoke test: $BIN --help"
           OUT=$("$BIN" --help 2>&1)
@@ -186,8 +186,8 @@ jobs:
       - name: Upload NKit Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nkit-${ matrix.target.os }-${ matrix.target.arch }
-          path: nkit_src/artifact_dir/${ matrix.target.binary_name }
+          name: nkit-${{ matrix.target.os }}-${{ matrix.target.arch }}
+          path: nkit_src/artifact_dir/${{ matrix.target.binary_name }}
 
   publish-linux-x64:
     needs: build
@@ -198,10 +198,10 @@ jobs:
       tool: nkit
       artifact_name: nkit-linux-x86_64
       version: "3.1.0"
-      source_ref: ${ inputs.source_ref }
+      source_ref: ${{ inputs.source_ref }}
       toolchain: ".NET SDK 10.0.x NativeAOT"
       build_flavor: nativeaot
-      dry_run: ${ inputs.dry_run }
+      dry_run: ${{ inputs.dry_run }}
 
   publish-linux-arm64:
     needs: build
@@ -212,10 +212,10 @@ jobs:
       tool: nkit
       artifact_name: nkit-linux-arm64
       version: "3.1.0"
-      source_ref: ${ inputs.source_ref }
+      source_ref: ${{ inputs.source_ref }}
       toolchain: ".NET SDK 10.0.x NativeAOT"
       build_flavor: nativeaot
-      dry_run: ${ inputs.dry_run }
+      dry_run: ${{ inputs.dry_run }}
 
   publish-macos-arm64:
     needs: build
@@ -226,10 +226,10 @@ jobs:
       tool: nkit
       artifact_name: nkit-macos-arm64
       version: "3.1.0"
-      source_ref: ${ inputs.source_ref }
+      source_ref: ${{ inputs.source_ref }}
       toolchain: ".NET SDK 10.0.x NativeAOT"
       build_flavor: nativeaot
-      dry_run: ${ inputs.dry_run }
+      dry_run: ${{ inputs.dry_run }}
 
   publish-macos-x64:
     needs: build
@@ -240,10 +240,10 @@ jobs:
       tool: nkit
       artifact_name: nkit-macos-x86_64
       version: "3.1.0"
-      source_ref: ${ inputs.source_ref }
+      source_ref: ${{ inputs.source_ref }}
       toolchain: ".NET SDK 10.0.x NativeAOT"
       build_flavor: nativeaot
-      dry_run: ${ inputs.dry_run }
+      dry_run: ${{ inputs.dry_run }}
 
   publish-windows-x64:
     needs: build
@@ -254,7 +254,7 @@ jobs:
       tool: nkit
       artifact_name: nkit-windows-x86_64
       version: "3.1.0"
-      source_ref: ${ inputs.source_ref }
+      source_ref: ${{ inputs.source_ref }}
       toolchain: ".NET SDK 10.0.x NativeAOT"
       build_flavor: nativeaot
-      dry_run: ${ inputs.dry_run }
+      dry_run: ${{ inputs.dry_run }}

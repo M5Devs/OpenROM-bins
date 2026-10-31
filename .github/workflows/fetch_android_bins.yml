@@ -63,4 +63,4 @@ jobs:
       artifact_name: android-chdman
       version: mame0289
       build_flavor: same_as_linux_arm64
-      dry_run: ${ inputs.dry_run }
+      dry_run: ${{ inputs.dry_run }}
