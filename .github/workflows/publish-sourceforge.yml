@@ -225,17 +225,17 @@ jobs:
           SIZE: ${{ steps.compute.outputs.size }}
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
-          cat << EOF >> "$GITHUB_STEP_SUMMARY"
-          ### 🚀 SourceForge Publish Summary
-          | Field | Value |
-          |---|---|
-          | **Tool** | \`$TOOL\` |
-          | **Target** | \`$TARGET_OS/$TARGET_ARCH\` |
-          | **Filename** | \`$FILENAME\` |
-          | **SHA-256** | \`$SHA256\` |
-          | **Size** | \`$SIZE\` bytes |
-          | **Dry Run** | \`$DRY_RUN\` |
-          EOF
+          {
+            printf '%s\n' '### 🚀 SourceForge Publish Summary'
+            printf '%s\n' '| Field | Value |'
+            printf '%s\n' '|---|---|'
+            printf '| **Tool** | \x60%s\x60 |\n' "$TOOL"
+            printf '| **Target** | \x60%s/%s\x60 |\n' "$TARGET_OS" "$TARGET_ARCH"
+            printf '| **Filename** | \x60%s\x60 |\n' "$FILENAME"
+            printf '| **SHA-256** | \x60%s\x60 |\n' "$SHA256"
+            printf '| **Size** | %s bytes |\n' "$SIZE"
+            printf '| **Dry Run** | \x60%s\x60 |\n' "$DRY_RUN"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Open Pull Request for Manifest Updates
         if: ${{ inputs.dry_run == false }}
