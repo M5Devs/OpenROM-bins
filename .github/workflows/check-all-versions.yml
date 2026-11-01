@@ -3,6 +3,9 @@ name: Check All Binary Versions
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   check-windows:
     name: Check Windows x86_64
@@ -40,7 +43,8 @@ jobs:
       - name: Test Execution & Scrubbed Env
         run: |
           export DOTNET_ROOT=""
-          export PATH=$(echo "$PATH" | tr ":" "\n" | grep -v "dotnet" | tr "\n" ":")
+          PATH=$(echo "$PATH" | tr ":" "\n" | grep -v "dotnet" | tr "\n" ":")
+          export PATH
           for f in ./bin/*; do
               echo "Testing $f ..."
               "$f" --help || "$f" --version || true

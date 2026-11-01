@@ -22,7 +22,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python3 -c '
+          python3 - <<'PY'
           import json, urllib.request, os, subprocess
 
           with open("manifest.json") as f:
@@ -70,4 +70,4 @@ jobs:
                   subprocess.check_call(["gh", "issue", "create", "--title", "🔔 Upstream Binary Updates Available", "--body", body])
           else:
               print("All tools up to date!")
-          '
+          PY

@@ -29,7 +29,7 @@ jobs:
 
       - name: Verify Binaries against Manifest
         run: |
-          python3 -c '
+          python3 - <<'PY'
           import json, urllib.request, hashlib, sys, os
 
           BASE_URL = os.environ.get("OPENROM_BINS_BASE_URL", "https://downloads.sourceforge.net/project/openrom-binaries")
@@ -90,4 +90,4 @@ jobs:
               print("Integrity verification failed for one or more files!", file=sys.stderr)
               sys.exit(1)
           print("All binaries verified successfully!")
-          '
+          PY
