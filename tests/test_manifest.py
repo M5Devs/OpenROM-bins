@@ -738,3 +738,49 @@ def test_gen_sources_cli_roundtrip(tmp_path):
     )
     assert res.returncode == 0, res.stderr
     assert "SOURCES.md" in res.stdout
+
+
+# --- Task 5: LICENSES/README.md consistency --------------------------------
+
+def _licenses_rows():
+    path = os.path.join(REPO_ROOT, "LICENSES", "README.md")
+    rows = {}
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line.startswith("|"):
+                continue
+            cells = [c.strip() for c in line.strip("|").split("|")]
+            if len(cells) < 2 or cells[0] in ("Binary", "") or set(cells[0]) <= {"-"}:
+                continue
+            rows[cells[0]] = cells[1]
+    return rows
+
+
+def test_licenses_readme_covers_every_manifest_tool():
+    with open(MANIFEST_PATH, "r", encoding="utf-8") as f:
+        manifest = json.load(f)
+    rows = _licenses_rows()
+    missing = [t for t in manifest["tools"] if t not in rows]
+    assert not missing, f"tools missing from LICENSES/README.md: {missing}"
+
+
+def test_licenses_readme_matches_manifest_license_strings():
+    with open(MANIFEST_PATH, "r", encoding="utf-8") as f:
+        manifest = json.load(f)
+    rows = _licenses_rows()
+    mismatches = []
+    for tool_name, tool_data in manifest["tools"].items():
+        expected = tool_data.get("license")
+        actual = rows.get(tool_name)
+        if actual != expected:
+            mismatches.append((tool_name, expected, actual))
+    assert not mismatches, f"license mismatches: {mismatches}"
+
+
+def test_licenses_readme_has_no_cancelled_nkit_build_text():
+    path = os.path.join(REPO_ROOT, "LICENSES", "README.md")
+    with open(path, "r", encoding="utf-8") as f:
+        text = f.read().lower()
+    for needle in ("nativeaot", "patches/nkit", "0001-single-tfm"):
+        assert needle not in text, f"LICENSES/README.md still mentions {needle!r}"
