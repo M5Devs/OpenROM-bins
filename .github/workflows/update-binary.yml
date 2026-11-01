@@ -76,7 +76,7 @@ jobs:
           expected_sha = os.environ.get("EXPECTED_SHA", "")
 
           if tool == "nkit":
-              sys.exit("Error: NKit binaries cannot be updated via update-binary.yml! Use build-nkit.yml.")
+              sys.exit("Error: NKit is maintained manually (no build workflow). See README.")
 
           if not re.match(r"^[a-z0-9-]+$", tool):
               sys.exit(f"Invalid tool_name format: {tool}")
