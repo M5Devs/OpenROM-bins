@@ -784,3 +784,38 @@ def test_licenses_readme_has_no_cancelled_nkit_build_text():
         text = f.read().lower()
     for needle in ("nativeaot", "patches/nkit", "0001-single-tfm"):
         assert needle not in text, f"LICENSES/README.md still mentions {needle!r}"
+
+
+# --- Task 5: SECURITY.md permissions table --------------------------------
+
+def _security_permission_rows():
+    path = os.path.join(REPO_ROOT, "SECURITY.md")
+    rows = {}
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line.startswith("| `"):
+                continue
+            cells = [c.strip() for c in line.strip("|").split("|")]
+            if len(cells) < 2 or cells[0].strip("`") == "Workflow":
+                continue
+            rows[cells[0].strip("`")] = cells[1].replace("`", "")
+    return rows
+
+
+def test_security_md_permissions_table_matches_workflows():
+    import yaml
+    rows = _security_permission_rows()
+    workflows_dir = os.path.join(REPO_ROOT, ".github", "workflows")
+    for filename in sorted(os.listdir(workflows_dir)):
+        if not filename.endswith(".yml"):
+            continue
+        with open(os.path.join(workflows_dir, filename), "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        perms = data.get("permissions") or {}
+        documented = rows.get(filename)
+        assert documented is not None, f"{filename} missing from SECURITY.md table"
+        actual = ", ".join(f"{k}: {v}" for k, v in sorted(perms.items()))
+        assert documented == actual, (
+            f"{filename}: SECURITY.md says {documented!r}, workflow has {actual!r}"
+        )
