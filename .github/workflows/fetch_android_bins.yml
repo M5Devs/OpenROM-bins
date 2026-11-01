@@ -188,15 +188,15 @@ jobs:
           - tool: maxcso
             source_commit: ""
             source_ref: ""
-          - tool: xdelta3
-            source_commit: ""
-            source_ref: ""
           - tool: ecm
             source_commit: ${{ needs.resolve-ecm.outputs.source_commit }}
             source_ref: ${{ inputs.ecm_ref }}
           - tool: unecm
             source_commit: ${{ needs.resolve-ecm.outputs.source_commit }}
             source_ref: ${{ inputs.ecm_ref }}
+    # xdelta3 is intentionally absent: the upstream linux-arm64 release asset is
+    # dynamically linked, so it would not run on Android. Its existing manifest
+    # entry is left untouched (see the platform note in manifest.json).
     uses: ./.github/workflows/publish-sourceforge.yml
     with:
       os: android

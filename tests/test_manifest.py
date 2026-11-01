@@ -642,3 +642,36 @@ def test_live_macos_universal_pair_valid():
         if arm and arm.get("universal"):
             assert x86 and x86.get("universal")
             assert arm["sha256"] == x86["sha256"]
+
+
+# --- Task 5: nkit provenance + single-file rules --------------------------
+
+def test_nkit_single_file_rules_apply_for_upstream_release(tmp_path):
+    """The nkit path/basename rules must hold for any provenance."""
+    m = _base_manifest()
+    m["tools"]["nkit"] = {
+        "version": "3.1.0", "license": "MIT",
+        "upstream_repo": "https://github.com/Nanook/NKit",
+        "provenance": "upstream-release",
+        "platforms": {
+            "linux/x86_64": {
+                "path": "linux/x86_64/nkit-extra", "sha256": "c" * 64,
+                "size": 5, "executable": True, "status": "ok",
+            }
+        },
+    }
+    _assert_error(m, tmp_path, "must be named nkit or nkit.exe")
+
+
+def test_live_nkit_is_upstream_release_and_not_unpinned():
+    with open(MANIFEST_PATH, "r", encoding="utf-8") as f:
+        manifest = json.load(f)
+    assert manifest["tools"]["nkit"]["provenance"] == "upstream-release"
+    spec = importlib.util.spec_from_file_location(
+        "validate_manifest",
+        os.path.join(REPO_ROOT, "scripts", "validate_manifest.py"),
+    )
+    vm = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(vm)
+    _, warnings = vm.validate(manifest, REPO_ROOT)
+    assert not any("nkit" in w and "unpinned" in w for w in warnings)

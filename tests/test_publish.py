@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 import subprocess
+import importlib.util
 import pytest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -286,3 +287,53 @@ def test_update_manifest_entry_rejects_invalid(tmp_path, overrides):
     res = _run_update_entry(scripts_dir, tmp_repo, **overrides)
     assert res.returncode != 0, f"expected rejection for {overrides}"
     assert (tmp_repo / "manifest.json").read_bytes() == before, "manifest was modified"
+
+
+# ---------------------------------------------------------------------------
+# toolchain rule: publish-inputs and manifest validators must agree
+# ---------------------------------------------------------------------------
+
+NPM_TOOLCHAINS = [
+    "npm @emmercm/chdman-linux-x64@0.289.0",
+    "npm @emmercm/chdman-linux-arm64@0.289.0",
+    "npm @emmercm/chdman-darwin-x64@0.289.0",
+    "npm @emmercm/chdman-darwin-arm64@0.289.0",
+    "npm @emmercm/chdman-win32-x64@0.289.0",
+]
+
+
+@pytest.mark.parametrize("toolchain", NPM_TOOLCHAINS)
+def test_publish_inputs_accepts_npm_toolchain(toolchain):
+    res = _run_validator(**_valid_inputs(IN_TOOLCHAIN=toolchain))
+    assert res.returncode == 0, res.stderr
+
+
+@pytest.mark.parametrize("toolchain", NPM_TOOLCHAINS + ["rustc 1.85.0", "gcc 14.2.0"])
+def test_toolchain_passes_both_validators(toolchain):
+    """The string accepted by validate_publish_inputs must also pass the
+    manifest validator's toolchain rule (a concrete version must be present)."""
+    res = _run_validator(**_valid_inputs(IN_TOOLCHAIN=toolchain))
+    assert res.returncode == 0, res.stderr
+
+    spec = importlib.util.spec_from_file_location(
+        "validate_manifest", os.path.join(SCRIPTS_DIR, "validate_manifest.py")
+    )
+    vm = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(vm)
+    assert not vm._is_generic_toolchain(toolchain), (
+        f"manifest validator rejects {toolchain!r}"
+    )
+
+
+@pytest.mark.parametrize(
+    "toolchain",
+    [
+        "C Compiler",                       # no version digit
+        "gcc",                              # no version digit
+        "npm package @emmercm/chdman-*",    # wildcard, no version
+        "npm @emmercm/chdman",              # no version
+    ],
+)
+def test_publish_inputs_rejects_versionless_toolchain(toolchain):
+    res = _run_validator(**_valid_inputs(IN_TOOLCHAIN=toolchain))
+    assert res.returncode != 0, f"expected rejection for {toolchain!r}"

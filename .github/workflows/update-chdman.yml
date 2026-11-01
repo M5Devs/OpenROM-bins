@@ -120,7 +120,7 @@ jobs:
       tool: chdman
       artifact_name: chdman-linux-x86_64
       version: ${{ needs.extract-and-publish.outputs.mame_version }}
-      toolchain: "npm package @emmercm/chdman-*"
+      toolchain: "npm @emmercm/chdman-linux-x64@${{ inputs.version }}"
       build_flavor: npm-extract
       dry_run: ${{ inputs.dry_run }}
 
@@ -133,7 +133,7 @@ jobs:
       tool: chdman
       artifact_name: chdman-linux-arm64
       version: ${{ needs.extract-and-publish.outputs.mame_version }}
-      toolchain: "npm package @emmercm/chdman-*"
+      toolchain: "npm @emmercm/chdman-linux-arm64@${{ inputs.version }}"
       build_flavor: npm-extract
       dry_run: ${{ inputs.dry_run }}
 
@@ -146,7 +146,7 @@ jobs:
       tool: chdman
       artifact_name: chdman-macos-x86_64
       version: ${{ needs.extract-and-publish.outputs.mame_version }}
-      toolchain: "npm package @emmercm/chdman-*"
+      toolchain: "npm @emmercm/chdman-darwin-x64@${{ inputs.version }}"
       build_flavor: npm-extract
       dry_run: ${{ inputs.dry_run }}
 
@@ -159,7 +159,7 @@ jobs:
       tool: chdman
       artifact_name: chdman-macos-arm64
       version: ${{ needs.extract-and-publish.outputs.mame_version }}
-      toolchain: "npm package @emmercm/chdman-*"
+      toolchain: "npm @emmercm/chdman-darwin-arm64@${{ inputs.version }}"
       build_flavor: npm-extract
       dry_run: ${{ inputs.dry_run }}
 
@@ -172,6 +172,6 @@ jobs:
       tool: chdman
       artifact_name: chdman-windows-x86_64
       version: ${{ needs.extract-and-publish.outputs.mame_version }}
-      toolchain: "npm package @emmercm/chdman-*"
+      toolchain: "npm @emmercm/chdman-win32-x64@${{ inputs.version }}"
       build_flavor: npm-extract
       dry_run: ${{ inputs.dry_run }}

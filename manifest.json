@@ -203,8 +203,8 @@
       "version": "3.1.0",
       "license": "MIT",
       "upstream_repo": "https://github.com/Nanook/NKit",
-      "provenance": "built-from-source",
-      "note": "binaries predate this manifest; build flavor and source are unverified",
+      "provenance": "upstream-release",
+      "note": "believed to come from NKit CLI release zips (see old update-nkit workflow in git history); unverified",
       "platforms": {
         "android/arm64-v8a": {
           "path": "android/arm64-v8a/nkit",
@@ -402,7 +402,8 @@
           "size": 430592,
           "executable": true,
           "status": "ok",
-          "version": "3.2.2"
+          "version": "3.2.2",
+          "note": "android build predates this manifest; not republished (upstream asset is dynamic)"
         },
         "linux/arm64": {
           "path": "linux/arm64/xdelta3",

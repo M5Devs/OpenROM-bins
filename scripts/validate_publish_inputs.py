@@ -25,7 +25,8 @@ RE_ARTIFACT = re.compile(r"[A-Za-z0-9._-]{1,100}")
 RE_VERSION = re.compile(r"[A-Za-z0-9._+-]{1,64}")
 RE_SOURCE_REF = re.compile(r"[A-Za-z0-9._/-]{1,128}")
 RE_SOURCE_COMMIT = re.compile(r"[0-9a-fA-F]{40}")
-RE_TOOLCHAIN = re.compile(r"[A-Za-z0-9 ._()+/,:=-]{0,160}")
+RE_TOOLCHAIN = re.compile(r"[A-Za-z0-9 ._()+/,:=@-]{0,160}")
+RE_TOOLCHAIN_DIGIT = re.compile(r"\d")
 RE_BUILD_FLAVOR = re.compile(r"[a-z0-9-]{0,32}")
 
 
@@ -100,7 +101,11 @@ def validate(env):
         _check_regex("source_ref", source_ref_val, RE_SOURCE_REF, "^[A-Za-z0-9._/-]{1,128}$")
     if source_commit_val:
         _check_regex("source_commit", source_commit_val, RE_SOURCE_COMMIT, "^[0-9a-fA-F]{40}$")
-    _check_regex("toolchain", toolchain_val, RE_TOOLCHAIN, "^[A-Za-z0-9 ._()+/,:=-]{0,160}$")
+    _check_regex("toolchain", toolchain_val, RE_TOOLCHAIN, "^[A-Za-z0-9 ._()+/,:=@-]{0,160}$")
+    if toolchain_val and not RE_TOOLCHAIN_DIGIT.search(toolchain_val):
+        raise InputError(
+            f"Invalid toolchain: {toolchain_val!r} (must name a concrete version)"
+        )
     _check_regex("build_flavor", build_flavor_val, RE_BUILD_FLAVOR, "^[a-z0-9-]{0,32}$")
 
     if dry_run_val not in ("true", "false"):
