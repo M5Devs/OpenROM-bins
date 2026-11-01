@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "chdman version e.g. 0.289.0"
+        description: "chdman npm version e.g. 0.289.0"
         required: true
         default: "0.289.0"
       dry_run:
@@ -19,8 +19,10 @@ permissions:
 
 jobs:
   extract-and-publish:
-    name: Extract & Publish chdman v${{ inputs.version }}
+    name: Extract chdman v${{ inputs.version }}
     runs-on: ubuntu-22.04
+    outputs:
+      mame_version: ${{ steps.extract.outputs.mame_version }}
     strategy:
       fail-fast: false
       matrix:
@@ -56,51 +58,58 @@ jobs:
           node-version: "20"
 
       - name: Extract & Verify npm Package
+        id: extract
         env:
           RAW_VERSION: ${{ inputs.version }}
           PKG: ${{ matrix.target.pkg }}
           FILENAME: ${{ matrix.target.filename }}
         run: |
-          python3 -c '
-          import os, sys, subprocess, json
+          python3 - <<'PY'
+          import base64, hashlib, json, os, subprocess, sys
 
           raw_ver = os.environ["RAW_VERSION"]
           pkg = os.environ["PKG"]
           filename = os.environ["FILENAME"]
 
-          # Verify integrity via npm view
-          print(f"Checking npm view {pkg}@{raw_ver}...")
-          info_raw = subprocess.check_output(["npm", "view", f"{pkg}@{raw_ver}", "--json"]).decode()
-          info = json.loads(info_raw)
+          print(f"Checking npm view {pkg}@{raw_ver} ...")
+          info = json.loads(subprocess.check_output(["npm", "view", f"{pkg}@{raw_ver}", "--json"]).decode())
           integrity = info.get("dist", {}).get("integrity", "")
-          print("NPM dist.integrity:", integrity)
+          if not integrity:
+              sys.exit(f"npm package {pkg}@{raw_ver} has no dist.integrity")
+          print("npm dist.integrity:", integrity)
 
-          # Download tarball
           tarball = subprocess.check_output(["npm", "pack", f"{pkg}@{raw_ver}"]).decode().strip()
+
+          with open(tarball, "rb") as f:
+              digest = hashlib.sha512(f.read()).digest()
+          computed = "sha512-" + base64.b64encode(digest).decode()
+          print("computed sha512:   ", computed)
+          if computed != integrity:
+              sys.exit(f"Integrity mismatch for {tarball}: computed {computed} != npm {integrity}")
+
           subprocess.check_call(["tar", "-xzf", tarball])
 
           os.makedirs("artifact_dir", exist_ok=True)
           extracted = os.path.join("package", "dist", filename)
           if not os.path.exists(extracted):
               sys.exit(f"Expected extracted binary at {extracted} not found!")
+          os.rename(extracted, os.path.join("artifact_dir", filename))
 
-          dest = os.path.join("artifact_dir", filename)
-          os.rename(extracted, dest)
+          # npm version is MAJOR.MINOR[.PATCH]; MAME releases are MAJOR.MINOR
+          # (e.g. 0.289.0 -> mame0289), so drop any npm patch component.
+          parts = raw_ver.split(".")
+          mame_ver = "mame" + "".join(parts[:2])
 
-          # Normalise version e.g. 0.289.0 -> mame0289
-          clean_ver = raw_ver.replace(".", "").lstrip("0")
-          mame_ver = f"mame0{clean_ver}"
-
-          with open(os.environ["GITHUB_ENV"], "a") as f:
-              f.write(f"MAME_VERSION={mame_ver}\n")
-              f.write(f"DIST_INTEGRITY={integrity}\n")
-          '
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"mame_version={mame_ver}\n")
+          PY
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: chdman-${{ matrix.target.os }}-${{ matrix.target.arch }}
           path: artifact_dir/${{ matrix.target.filename }}
+          if-no-files-found: error
 
   publish-linux-x64:
     needs: extract-and-publish
@@ -110,7 +119,7 @@ jobs:
       arch: x86_64
       tool: chdman
       artifact_name: chdman-linux-x86_64
-      version: mame0289
+      version: ${{ needs.extract-and-publish.outputs.mame_version }}
       toolchain: "npm package @emmercm/chdman-*"
       build_flavor: npm-extract
       dry_run: ${{ inputs.dry_run }}
@@ -123,7 +132,7 @@ jobs:
       arch: arm64
       tool: chdman
       artifact_name: chdman-linux-arm64
-      version: mame0289
+      version: ${{ needs.extract-and-publish.outputs.mame_version }}
       toolchain: "npm package @emmercm/chdman-*"
       build_flavor: npm-extract
       dry_run: ${{ inputs.dry_run }}
@@ -136,7 +145,7 @@ jobs:
       arch: x86_64
       tool: chdman
       artifact_name: chdman-macos-x86_64
-      version: mame0289
+      version: ${{ needs.extract-and-publish.outputs.mame_version }}
       toolchain: "npm package @emmercm/chdman-*"
       build_flavor: npm-extract
       dry_run: ${{ inputs.dry_run }}
@@ -149,7 +158,7 @@ jobs:
       arch: arm64
       tool: chdman
       artifact_name: chdman-macos-arm64
-      version: mame0289
+      version: ${{ needs.extract-and-publish.outputs.mame_version }}
       toolchain: "npm package @emmercm/chdman-*"
       build_flavor: npm-extract
       dry_run: ${{ inputs.dry_run }}
@@ -162,7 +171,7 @@ jobs:
       arch: x86_64
       tool: chdman
       artifact_name: chdman-windows-x86_64
-      version: mame0289
+      version: ${{ needs.extract-and-publish.outputs.mame_version }}
       toolchain: "npm package @emmercm/chdman-*"
       build_flavor: npm-extract
       dry_run: ${{ inputs.dry_run }}
