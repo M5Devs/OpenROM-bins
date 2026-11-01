@@ -188,7 +188,7 @@ def _base_manifest():
     }
 
 
-def _write_root(tmp_path, manifest, checksums=None, versions=None):
+def _write_root(tmp_path, manifest, checksums=None, versions=None, sources=None):
     vm = _load_validator()
     root = tmp_path / "repo"
     (root / "schema").mkdir(parents=True, exist_ok=True)
@@ -200,13 +200,16 @@ def _write_root(tmp_path, manifest, checksums=None, versions=None):
         checksums = vm.expected_checksums(manifest)
     if versions is None:
         versions = vm.expected_versions(manifest)
+    if sources is None:
+        sources = vm.render_sources(manifest)
     (root / "checksums.sha256").write_text(checksums, encoding="utf-8")
     (root / "versions.json").write_text(versions, encoding="utf-8")
+    (root / "SOURCES.md").write_text(sources, encoding="utf-8")
     return root
 
 
-def _validate(manifest, tmp_path, checksums=None, versions=None, strict=False):
-    root = _write_root(tmp_path, manifest, checksums, versions)
+def _validate(manifest, tmp_path, checksums=None, versions=None, strict=False, sources=None):
+    root = _write_root(tmp_path, manifest, checksums, versions, sources)
     vm = _load_validator()
     return vm.validate(manifest, str(root), strict=strict)
 
@@ -675,3 +678,63 @@ def test_live_nkit_is_upstream_release_and_not_unpinned():
     spec.loader.exec_module(vm)
     _, warnings = vm.validate(manifest, REPO_ROOT)
     assert not any("nkit" in w and "unpinned" in w for w in warnings)
+
+
+# --- Task 5: SOURCES.md generation ----------------------------------------
+
+def test_sources_md_is_up_to_date():
+    with open(MANIFEST_PATH, "r", encoding="utf-8") as f:
+        manifest = json.load(f)
+    vm = _load_validator()
+    with open(os.path.join(REPO_ROOT, "SOURCES.md"), "r", encoding="utf-8") as f:
+        assert f.read() == vm.render_sources(manifest)
+
+
+def test_sources_md_header_and_unknowns(tmp_path):
+    vm = _load_validator()
+    text = vm.render_sources(_base_manifest())
+    assert "Generated from manifest.json - do not edit by hand" in text
+    assert "| unknown |" in text or "|unknown|" in text
+
+
+def test_sources_md_out_of_date_is_error(tmp_path):
+    m = _base_manifest()
+    errors, _ = _validate(m, tmp_path, sources="stale content\n")
+    assert any("SOURCES.md is out of date" in e for e in errors)
+
+
+def test_sources_md_alias_shows_same_as(tmp_path):
+    m = _base_manifest()
+    m["tools"]["unecm"] = {
+        "license": "MIT",
+        "upstream_repo": "https://github.com/example/ecm",
+        "provenance": "upstream-release",
+        "version_alias_of": "demo",
+        "platforms": {
+            "linux/x86_64": {
+                "path": "linux/x86_64/unecm", "sha256": "b" * 64,
+                "size": 7, "executable": True, "status": "ok",
+            }
+        },
+    }
+    vm = _load_validator()
+    text = vm.render_sources(m)
+    assert "| unecm | same as demo |" in text
+
+
+def test_sources_md_missing_file_is_error(tmp_path):
+    m = _base_manifest()
+    root = _write_root(tmp_path, m)
+    os.remove(os.path.join(root, "SOURCES.md"))
+    vm = _load_validator()
+    errors, _ = vm.validate(m, str(root))
+    assert any("SOURCES.md not found" in e for e in errors)
+
+
+def test_gen_sources_cli_roundtrip(tmp_path):
+    res = subprocess.run(
+        ["python3", os.path.join(REPO_ROOT, "scripts", "gen_sources.py")],
+        capture_output=True, text=True, cwd=REPO_ROOT,
+    )
+    assert res.returncode == 0, res.stderr
+    assert "SOURCES.md" in res.stdout

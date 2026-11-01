@@ -16,6 +16,13 @@ try:
 except ImportError:  # pragma: no cover - environment dependent
     jsonschema = None
 
+# Import the SOURCES.md renderer so the validator and the generator cannot drift.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from gen_sources import render_sources
+except ImportError:  # pragma: no cover - environment dependent
+    render_sources = None
+
 ALLOWED_PLATFORMS = {
     "windows/x86_64",
     "linux/x86_64",
@@ -352,6 +359,17 @@ def _validate_generated_files(manifest, root, errors):
             actual = f.read()
         if actual != expected_versions(manifest):
             errors.append("versions.json is out of date with manifest.json")
+
+    sources_path = os.path.join(root, "SOURCES.md")
+    if render_sources is None:
+        errors.append("gen_sources.py not importable; cannot check SOURCES.md")
+    elif not os.path.exists(sources_path):
+        errors.append("SOURCES.md not found")
+    else:
+        with open(sources_path, "r", encoding="utf-8") as f:
+            actual_sources = f.read()
+        if actual_sources != render_sources(manifest):
+            errors.append("SOURCES.md is out of date with manifest.json")
 
 
 def validate(manifest, root, strict=False):
