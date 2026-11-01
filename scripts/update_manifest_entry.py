@@ -2,8 +2,73 @@
 import argparse
 import json
 import os
+import re
 import sys
 import subprocess
+
+# Same patterns as scripts/validate_publish_inputs.py, kept local so this
+# script stays self-contained (it is copied standalone into test sandboxes).
+RE_SHA256 = re.compile(r"[0-9a-fA-F]{64}")
+RE_BASENAME = re.compile(r"[A-Za-z0-9._-]+")
+RE_VERSION = re.compile(r"[A-Za-z0-9._+-]{1,64}")
+RE_SOURCE_REF = re.compile(r"[A-Za-z0-9._/-]{1,128}")
+RE_SOURCE_COMMIT = re.compile(r"[0-9a-fA-F]{40}")
+RE_TOOLCHAIN = re.compile(r"[A-Za-z0-9 ._()+/,:=@-]{0,160}")
+RE_TOOLCHAIN_DIGIT = re.compile(r"\d")
+RE_BUILD_FLAVOR = re.compile(r"[a-z0-9-]{0,32}")
+
+
+def validate_args(args):
+    """Raise SystemExit with a message on the first invalid argument."""
+    def fail(msg):
+        print(f"Error: {msg}", file=sys.stderr)
+        sys.exit(1)
+
+    for name, value in [
+        ("sha256", args.sha256),
+        ("file-path", args.file_path),
+        ("version", args.version or ""),
+        ("source-ref", args.source_ref or ""),
+        ("source-commit", args.source_commit or ""),
+        ("toolchain", args.toolchain or ""),
+        ("build-flavor", args.build_flavor or ""),
+    ]:
+        if "\x00" in value or "\n" in value or "\r" in value:
+            fail(f"--{name} contains a forbidden control character")
+
+    if not RE_SHA256.fullmatch(args.sha256):
+        fail(f"--sha256 must be 64 hex characters, got {args.sha256!r}")
+
+    if args.size < 1:
+        fail(f"--size must be >= 1, got {args.size}")
+
+    parts = args.file_path.split("/")
+    if len(parts) != 3:
+        fail(f"--file-path must be <os>/<arch>/<basename>, got {args.file_path!r}")
+    path_os, path_arch, basename = parts
+    if path_os != args.os or path_arch != args.arch:
+        fail(
+            f"--file-path {args.file_path!r} is inconsistent with "
+            f"--os {args.os!r} / --arch {args.arch!r}"
+        )
+    if not RE_BASENAME.fullmatch(basename):
+        fail(f"--file-path basename must match ^[A-Za-z0-9._-]+$, got {basename!r}")
+
+    if args.version and not RE_VERSION.fullmatch(args.version):
+        fail(f"Invalid --version: {args.version!r}")
+    if args.source_ref and not RE_SOURCE_REF.fullmatch(args.source_ref):
+        fail(f"Invalid --source-ref: {args.source_ref!r}")
+    if args.source_commit and not RE_SOURCE_COMMIT.fullmatch(args.source_commit):
+        fail(f"Invalid --source-commit: {args.source_commit!r}")
+    if args.toolchain and not RE_TOOLCHAIN.fullmatch(args.toolchain):
+        fail(f"Invalid --toolchain: {args.toolchain!r}")
+    if args.toolchain and not RE_TOOLCHAIN_DIGIT.search(args.toolchain):
+        fail(f"Invalid --toolchain: {args.toolchain!r} (must name a concrete version)")
+    if args.build_flavor and not RE_BUILD_FLAVOR.fullmatch(args.build_flavor):
+        fail(f"Invalid --build-flavor: {args.build_flavor!r}")
+
+    return basename
+
 
 def main():
     parser = argparse.ArgumentParser(description="Update manifest.json entry and regenerate checksums")
@@ -22,6 +87,8 @@ def main():
     parser.add_argument("--build-flavor", help="Build flavor e.g. nativeaot")
 
     args = parser.parse_args()
+
+    basename = validate_args(args)
 
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     manifest_path = os.path.join(repo_root, "manifest.json")
@@ -60,6 +127,16 @@ def main():
 
     platforms = tool_data.setdefault("platforms", {})
     plat_entry = platforms.get(platform_key, {})
+
+    if plat_entry.get("path"):
+        existing_basename = os.path.basename(plat_entry["path"])
+        if existing_basename != basename:
+            print(
+                f"Error: existing manifest entry {platform_key} has basename "
+                f"{existing_basename!r}, but the new file is {basename!r}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
     plat_entry["path"] = args.file_path
     plat_entry["sha256"] = args.sha256

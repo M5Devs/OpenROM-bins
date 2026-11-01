@@ -203,7 +203,8 @@
       "version": "3.1.0",
       "license": "MIT",
       "upstream_repo": "https://github.com/Nanook/NKit",
-      "provenance": "built-from-source",
+      "provenance": "upstream-release",
+      "note": "believed to come from NKit CLI release zips (see old update-nkit workflow in git history); unverified",
       "platforms": {
         "android/arm64-v8a": {
           "path": "android/arm64-v8a/nkit",
@@ -297,7 +298,7 @@
     "saturn-patcher": {
       "version": "0.1.0",
       "license": "GPL-3.0-or-later",
-      "upstream_repo": "https://github.com/M5Devs/saturn-patcher",
+      "upstream_repo": "https://github.com/ralfguth/saturn-patcher-egui",
       "provenance": "built-from-source",
       "platforms": {
         "linux/arm64": {
@@ -338,10 +339,11 @@
       }
     },
     "unecm": {
-      "version": "0.0.0",
       "license": "GPL-2.0-only",
       "upstream_repo": "https://github.com/kidoz/ecm",
       "provenance": "upstream-release",
+      "version_alias_of": "ecm",
+      "note": "version taken from ecm (same upstream project)",
       "platforms": {
         "android/arm64-v8a": {
           "path": "android/arm64-v8a/unecm",
@@ -400,7 +402,8 @@
           "size": 430592,
           "executable": true,
           "status": "ok",
-          "version": "3.2.2"
+          "version": "3.2.2",
+          "note": "android build predates this manifest; not republished (upstream asset is dynamic)"
         },
         "linux/arm64": {
           "path": "linux/arm64/xdelta3",

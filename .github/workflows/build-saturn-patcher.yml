@@ -3,14 +3,14 @@ name: Build saturn-patcher
 on:
   workflow_dispatch:
     inputs:
-      source_ref:
-        description: "saturn-patcher git tag or 40-char SHA (e.g. 0.1.0)"
-        required: true
-        default: "0.1.0"
       version:
         description: "Version string (e.g. 0.1.0)"
         required: true
         default: "0.1.0"
+      source_ref:
+        description: "Upstream git tag or 40-char commit SHA (e.g. v0.1.0)"
+        required: true
+        default: "v0.1.0"
       dry_run:
         description: "Dry run publish to SourceForge"
         type: boolean
@@ -21,66 +21,179 @@ permissions:
   contents: write
   pull-requests: write
 
+env:
+  UPSTREAM_REPO: https://github.com/ralfguth/saturn-patcher-egui.git
+
 jobs:
-  build-linux-x64:
+  resolve:
+    name: Resolve upstream commit
     runs-on: ubuntu-22.04
+    outputs:
+      source_commit: ${{ steps.resolve.outputs.source_commit }}
     steps:
-      - name: Checkout OpenROM-bins
-        uses: actions/checkout@v4
-
-      - name: Validate source_ref Input
+      - name: Validate Inputs
         env:
-          REF: ${ inputs.source_ref }
+          VERSION: ${{ inputs.version }}
+          REF: ${{ inputs.source_ref }}
         run: |
-          python3 -c '
-          import os, sys, re
-          ref = os.environ.get("REF", "")
-          if not re.match(r"^[A-Za-z0-9._/-]+$", ref):
-              sys.exit("Invalid source_ref input: " + ref)
-          print("source_ref validated:", ref)
-          '
+          python3 - <<'PY'
+          import os, re, sys
 
-      - name: Install Rust
+          version = os.environ.get("VERSION", "")
+          ref = os.environ.get("REF", "")
+
+          if not re.fullmatch(r"[A-Za-z0-9._+-]{1,64}", version):
+              sys.exit(f"Invalid version input: {version!r}")
+          if not re.fullmatch(r"[A-Za-z0-9._/-]{1,128}", ref):
+              sys.exit(f"Invalid source_ref input: {ref!r}")
+
+          print("version validated:", version)
+          print("source_ref validated:", ref)
+          PY
+
+      - name: Clone upstream and resolve commit
+        id: resolve
+        env:
+          REF: ${{ inputs.source_ref }}
+        run: |
+          git clone "$UPSTREAM_REPO" saturn_src
+          cd saturn_src || exit 1
+          git checkout --detach "$REF"
+          COMMIT=$(git rev-parse HEAD)
+          if ! printf '%s' "$COMMIT" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::resolved commit is not a 40-char hex SHA: $COMMIT"
+            exit 1
+          fi
+          echo "Resolved $REF -> $COMMIT"
+          echo "source_commit=$COMMIT" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.target.os }}/${{ matrix.target.arch }}
+    needs: resolve
+    runs-on: ${{ matrix.target.runner }}
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - os: linux
+            arch: x86_64
+            runner: ubuntu-22.04
+            rust_target: x86_64-unknown-linux-musl
+            bin: saturn-patcher
+            artifact: saturn-patcher-linux-x86_64
+          - os: linux
+            arch: arm64
+            runner: ubuntu-24.04-arm
+            rust_target: aarch64-unknown-linux-musl
+            bin: saturn-patcher
+            artifact: saturn-patcher-linux-arm64
+          - os: macos
+            arch: arm64
+            runner: macos-15
+            rust_target: aarch64-apple-darwin
+            bin: saturn-patcher
+            artifact: saturn-patcher-macos-arm64
+          - os: macos
+            arch: x86_64
+            runner: macos-15-intel
+            rust_target: x86_64-apple-darwin
+            bin: saturn-patcher
+            artifact: saturn-patcher-macos-x86_64
+          - os: windows
+            arch: x86_64
+            runner: windows-2022
+            rust_target: x86_64-pc-windows-msvc
+            bin: saturn-patcher.exe
+            artifact: saturn-patcher-windows-x86_64
+    steps:
+      - name: Checkout saturn-patcher at resolved commit
+        uses: actions/checkout@v4
+        with:
+          repository: ralfguth/saturn-patcher-egui
+          ref: ${{ needs.resolve.outputs.source_commit }}
+          path: saturn_src
+
+      - name: Install Rust 1.85.0
         uses: dtolnay/rust-toolchain@1.85.0
         with:
-          targets: x86_64-unknown-linux-musl
+          targets: ${{ matrix.target.rust_target }}
 
       - name: Install musl tools
-        run: sudo apt-get install -y -q musl-tools
+        if: matrix.target.os == 'linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -q musl-tools
 
-      - name: Clone saturn-patcher
+      - name: Build release binary
         env:
-          REF: ${ inputs.source_ref }
+          TARGET: ${{ matrix.target.rust_target }}
+          BIN_NAME: ${{ matrix.target.bin }}
         run: |
-          git clone https://github.com/M5Devs/saturn-patcher.git saturn_src
-          cd saturn_src
-          git checkout "$REF"
-          COMMIT_SHA=$(git rev-parse HEAD)
-          echo "SOURCE_COMMIT=$COMMIT_SHA" >> $GITHUB_ENV
-
-      - name: Build musl binary
-        run: |
-          cd saturn_src
-          cargo build --release --target x86_64-unknown-linux-musl
+          cd saturn_src || exit 1
+          cargo build --release --locked --bin saturn-patcher --target "$TARGET"
           mkdir -p ../artifact_dir
-          cp target/x86_64-unknown-linux-musl/release/saturn-patcher ../artifact_dir/saturn-patcher
+          cp "target/$TARGET/release/$BIN_NAME" "../artifact_dir/$BIN_NAME"
+
+      - name: Verify static linking
+        if: matrix.target.os == 'linux'
+        env:
+          BIN_NAME: ${{ matrix.target.bin }}
+        run: |
+          file "artifact_dir/$BIN_NAME"
+          if ! file "artifact_dir/$BIN_NAME" | grep -qE 'statically linked|static-pie'; then
+            echo "::error::Linux binary is not statically linked or static-pie"
+            exit 1
+          fi
+
+      - name: Inspect binary
+        if: matrix.target.os == 'macos'
+        env:
+          BIN_NAME: ${{ matrix.target.bin }}
+        run: |
+          file "artifact_dir/$BIN_NAME"
+          lipo -info "artifact_dir/$BIN_NAME"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: saturn-patcher-linux-x86_64
-          path: artifact_dir/saturn-patcher
+          name: ${{ matrix.target.artifact }}
+          path: artifact_dir/${{ matrix.target.bin }}
+          if-no-files-found: error
 
-  publish-linux-x64:
-    needs: build-linux-x64
+  publish:
+    name: Publish saturn-patcher (${{ matrix.target.os }}/${{ matrix.target.arch }})
+    needs: [resolve, build]
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - os: linux
+            arch: x86_64
+            artifact: saturn-patcher-linux-x86_64
+          - os: linux
+            arch: arm64
+            artifact: saturn-patcher-linux-arm64
+          - os: macos
+            arch: arm64
+            artifact: saturn-patcher-macos-arm64
+          - os: macos
+            arch: x86_64
+            artifact: saturn-patcher-macos-x86_64
+          - os: windows
+            arch: x86_64
+            artifact: saturn-patcher-windows-x86_64
     uses: ./.github/workflows/publish-sourceforge.yml
     with:
-      os: linux
-      arch: x86_64
+      os: ${{ matrix.target.os }}
+      arch: ${{ matrix.target.arch }}
       tool: saturn-patcher
-      artifact_name: saturn-patcher-linux-x86_64
-      version: ${ inputs.version }
-      source_ref: ${ inputs.source_ref }
-      toolchain: "rustc 1.85.0 (x86_64-unknown-linux-musl)"
+      artifact_name: ${{ matrix.target.artifact }}
+      version: ${{ inputs.version }}
+      source_ref: ${{ inputs.source_ref }}
+      source_commit: ${{ needs.resolve.outputs.source_commit }}
+      toolchain: "rustc 1.85.0"
       build_flavor: release
-      dry_run: ${ inputs.dry_run }
+      dry_run: ${{ inputs.dry_run }}

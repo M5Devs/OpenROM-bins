@@ -52,7 +52,7 @@ permissions:
 
 jobs:
   download-and-publish:
-    name: Download & Publish ${ inputs.tool_name } (${ inputs.target_os }/${ inputs.target_arch })
+    name: Download & Publish ${{ inputs.tool_name }} (${{ inputs.target_os }}/${{ inputs.target_arch }})
     runs-on: ubuntu-22.04
 
     steps:
@@ -61,10 +61,10 @@ jobs:
 
       - name: Validate Inputs & Domain Allowlist
         env:
-          TOOL: ${ inputs.tool_name }
-          FILENAME: ${ inputs.binary_filename }
-          URL: ${ inputs.download_url }
-          EXPECTED_SHA: ${ inputs.expected_sha256 }
+          TOOL: ${{ inputs.tool_name }}
+          FILENAME: ${{ inputs.binary_filename }}
+          URL: ${{ inputs.download_url }}
+          EXPECTED_SHA: ${{ inputs.expected_sha256 }}
         run: |
           python3 -c '
           import os, sys, re
@@ -76,7 +76,7 @@ jobs:
           expected_sha = os.environ.get("EXPECTED_SHA", "")
 
           if tool == "nkit":
-              sys.exit("Error: NKit binaries cannot be updated via update-binary.yml! Use build-nkit.yml.")
+              sys.exit("Error: NKit is maintained manually (no build workflow). See README.")
 
           if not re.match(r"^[a-z0-9-]+$", tool):
               sys.exit(f"Invalid tool_name format: {tool}")
@@ -100,9 +100,9 @@ jobs:
 
       - name: Download & Verify Binary
         env:
-          URL: ${ inputs.download_url }
-          FILENAME: ${ inputs.binary_filename }
-          EXPECTED_SHA: ${ inputs.expected_sha256 }
+          URL: ${{ inputs.download_url }}
+          FILENAME: ${{ inputs.binary_filename }}
+          EXPECTED_SHA: ${{ inputs.expected_sha256 }}
         run: |
           mkdir -p artifact_dir
           curl --retry 5 -fL "$URL" -o "artifact_dir/$FILENAME"
@@ -121,17 +121,17 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: binary-${ inputs.tool_name }-${ inputs.target_os }-${ inputs.target_arch }
-          path: artifact_dir/${ inputs.binary_filename }
+          name: binary-${{ inputs.tool_name }}-${{ inputs.target_os }}-${{ inputs.target_arch }}
+          path: artifact_dir/${{ inputs.binary_filename }}
 
   publish:
     needs: download-and-publish
     uses: ./.github/workflows/publish-sourceforge.yml
     with:
-      os: ${ inputs.target_os }
-      arch: ${ inputs.target_arch }
-      tool: ${ inputs.tool_name }
-      artifact_name: binary-${ inputs.tool_name }-${ inputs.target_os }-${ inputs.target_arch }
-      version: ${ inputs.version }
+      os: ${{ inputs.target_os }}
+      arch: ${{ inputs.target_arch }}
+      tool: ${{ inputs.tool_name }}
+      artifact_name: binary-${{ inputs.tool_name }}-${{ inputs.target_os }}-${{ inputs.target_arch }}
+      version: ${{ inputs.version }}
       build_flavor: upstream-download
-      dry_run: ${ inputs.dry_run }
+      dry_run: ${{ inputs.dry_run }}

@@ -3,6 +3,22 @@ name: Fetch Android ARM64 Binaries
 on:
   workflow_dispatch:
     inputs:
+      chdman_version:
+        description: "chdman npm version (e.g. 0.289.0)"
+        required: true
+        default: "0.289.0"
+      maxcso_version:
+        description: "maxcso npm version (e.g. 0.1130.16)"
+        required: true
+        default: "0.1130.16"
+      xdelta3_version:
+        description: "xdelta3 release version (e.g. 3.2.2)"
+        required: true
+        default: "3.2.2"
+      ecm_ref:
+        description: "kidoz/ecm git tag or commit SHA (e.g. v1.3.4)"
+        required: true
+        default: "v1.3.4"
       dry_run:
         description: "Dry run mode"
         type: boolean
@@ -13,54 +29,180 @@ permissions:
   contents: write
   pull-requests: write
 
+env:
+  ECM_REPO: https://github.com/kidoz/ecm.git
+
 jobs:
-  fetch-and-verify:
-    name: Fetch & Verify Android ARM64 Binaries
-    runs-on: ubuntu-latest
+  resolve-ecm:
+    name: Resolve ecm commit
+    runs-on: ubuntu-22.04
+    outputs:
+      source_commit: ${{ steps.resolve.outputs.source_commit }}
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup Tools
+      - name: Validate Inputs
+        env:
+          CHDMAN_VERSION: ${{ inputs.chdman_version }}
+          MAXCSO_VERSION: ${{ inputs.maxcso_version }}
+          XDELTA3_VERSION: ${{ inputs.xdelta3_version }}
+          ECM_REF: ${{ inputs.ecm_ref }}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu tar curl file
+          python3 - <<'PY'
+          import os, re, sys
 
-      - name: Fetch static chdman
+          for name in ("CHDMAN_VERSION", "MAXCSO_VERSION", "XDELTA3_VERSION"):
+              value = os.environ.get(name, "")
+              if not re.fullmatch(r"[A-Za-z0-9._+-]{1,64}", value):
+                  sys.exit(f"Invalid {name}: {value!r}")
+
+          ref = os.environ.get("ECM_REF", "")
+          if not re.fullmatch(r"[A-Za-z0-9._/-]{1,128}", ref):
+              sys.exit(f"Invalid ecm_ref: {ref!r}")
+
+          print("All inputs validated.")
+          PY
+
+      - name: Clone ecm and resolve commit
+        id: resolve
+        env:
+          REF: ${{ inputs.ecm_ref }}
         run: |
-          npm pack @emmercm/chdman-linux-arm64
-          tar -xzf emmercm-chdman-linux-arm64-*.tgz
+          git clone "$ECM_REPO" ecm_src
+          cd ecm_src || exit 1
+          git checkout --detach "$REF"
+          COMMIT=$(git rev-parse HEAD)
+          if ! printf '%s' "$COMMIT" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::resolved commit is not a 40-char hex SHA: $COMMIT"
+            exit 1
+          fi
+          echo "Resolved $REF -> $COMMIT"
+          echo "source_commit=$COMMIT" >> "$GITHUB_OUTPUT"
+
+  fetch:
+    name: Fetch ${{ matrix.tool }}
+    needs: resolve-ecm
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        tool: [chdman, maxcso, xdelta3, ecm, unecm]
+    steps:
+      - name: Setup tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -q gcc-aarch64-linux-gnu tar curl file
+
+      - name: Fetch npm package (chdman)
+        if: matrix.tool == 'chdman'
+        env:
+          VERSION: ${{ inputs.chdman_version }}
+        run: |
           mkdir -p artifact_dir
+          npm pack "@emmercm/chdman-linux-arm64@${VERSION}"
+          tar -xzf emmercm-chdman-linux-arm64-*.tgz
           cp package/dist/chdman artifact_dir/chdman
           rm -rf package emmercm-*.tgz
 
-      - name: Verify Android Static Linking
+      - name: Fetch npm package (maxcso)
+        if: matrix.tool == 'maxcso'
+        env:
+          VERSION: ${{ inputs.maxcso_version }}
         run: |
-          python3 -c '
-          import subprocess, sys, glob
+          mkdir -p artifact_dir
+          npm pack "@emmercm/maxcso-linux-arm64@${VERSION}"
+          tar -xzf emmercm-maxcso-linux-arm64-*.tgz
+          cp package/dist/maxcso artifact_dir/maxcso
+          rm -rf package emmercm-*.tgz
 
-          files = glob.glob("artifact_dir/*")
-          for f in files:
-              res = subprocess.check_output(["file", f]).decode()
-              print(f"File check for {f}: {res.strip()}")
-              if "statically linked" not in res and "static-pie" not in res:
-                  print(f"Warning: {f} is not explicitly statically linked!")
-          '
+      - name: Fetch xdelta3 release asset
+        if: matrix.tool == 'xdelta3'
+        env:
+          VERSION: ${{ inputs.xdelta3_version }}
+        run: |
+          mkdir -p artifact_dir
+          URL="https://github.com/jmacd/xdelta/releases/download/v${VERSION}/xdelta3-${VERSION}-linux-arm64.tar.gz"
+          curl --retry 5 -fL "$URL" -o xdelta3.tar.gz
+          tar -xzf xdelta3.tar.gz
+          cp "xdelta3-${VERSION}-linux-arm64/xdelta3" artifact_dir/xdelta3
+
+      - name: Checkout ecm at resolved commit
+        if: matrix.tool == 'ecm' || matrix.tool == 'unecm'
+        uses: actions/checkout@v4
+        with:
+          repository: kidoz/ecm
+          ref: ${{ needs.resolve-ecm.outputs.source_commit }}
+          path: ecm_src
+          fetch-depth: 0
+
+      - name: Build static ecm / unecm
+        if: matrix.tool == 'ecm' || matrix.tool == 'unecm'
+        env:
+          TOOL: ${{ matrix.tool }}
+        run: |
+          VER=$(git -C ecm_src describe --tags --always)
+          sed "s/@VERSION@/${VER}/" ecm_src/include/version.h.in > ecm_src/include/version.h
+          mkdir -p artifact_dir
+          aarch64-linux-gnu-gcc -std=c2x -O2 -pthread -static \
+            -Iecm_src/include -Iecm_src ecm_src/src/eccedc.c "ecm_src/src/${TOOL}.c" \
+            -o "artifact_dir/${TOOL}"
+          test -s "artifact_dir/${TOOL}"
+
+      - name: Verify static linking (hard fail)
+        if: matrix.tool != 'xdelta3'
+        env:
+          TOOL: ${{ matrix.tool }}
+        run: |
+          BIN="artifact_dir/${TOOL}"
+          file "$BIN"
+          if ! file "$BIN" | grep -qE 'statically linked|static-pie'; then
+            echo "::error::${TOOL} is not statically linked or static-pie"
+            exit 1
+          fi
+
+      - name: Report xdelta3 linking
+        if: matrix.tool == 'xdelta3'
+        run: |
+          BIN="artifact_dir/xdelta3"
+          file "$BIN"
+          if ! file "$BIN" | grep -qE 'statically linked|static-pie'; then
+            echo "::warning::xdelta3 upstream release asset is dynamically linked; it cannot run on Android without its interpreter and libs"
+            echo "xdelta3 upstream asset is NOT statically linked (see Decisions needed in the PR)." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: android-chdman
-          path: artifact_dir/chdman
+          name: android-${{ matrix.tool }}
+          path: artifact_dir/${{ matrix.tool }}
+          if-no-files-found: error
 
-  publish-chdman:
-    needs: fetch-and-verify
+  publish:
+    name: Publish ${{ matrix.tool }}
+    needs: [resolve-ecm, fetch]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - tool: chdman
+            source_commit: ""
+            source_ref: ""
+          - tool: maxcso
+            source_commit: ""
+            source_ref: ""
+          - tool: ecm
+            source_commit: ${{ needs.resolve-ecm.outputs.source_commit }}
+            source_ref: ${{ inputs.ecm_ref }}
+          - tool: unecm
+            source_commit: ${{ needs.resolve-ecm.outputs.source_commit }}
+            source_ref: ${{ inputs.ecm_ref }}
+    # xdelta3 is intentionally absent: the upstream linux-arm64 release asset is
+    # dynamically linked, so it would not run on Android. Its existing manifest
+    # entry is left untouched (see the platform note in manifest.json).
     uses: ./.github/workflows/publish-sourceforge.yml
     with:
       os: android
       arch: arm64-v8a
-      tool: chdman
-      artifact_name: android-chdman
-      version: mame0289
-      build_flavor: same_as_linux_arm64
-      dry_run: ${ inputs.dry_run }
+      tool: ${{ matrix.tool }}
+      artifact_name: android-${{ matrix.tool }}
+      source_ref: ${{ matrix.source_ref }}
+      source_commit: ${{ matrix.source_commit }}
+      dry_run: ${{ inputs.dry_run }}
