@@ -97,7 +97,7 @@ jobs:
     name: Publish ${{ inputs.tool }} (${{ inputs.os }}/${{ inputs.arch }})
     runs-on: ubuntu-22.04
     concurrency:
-      group: publish-${{ inputs.os }}-${{ inputs.arch }}-${{ inputs.tool }}
+      group: publish-manifest-${{ inputs.tool }}-${{ github.run_id }}
       cancel-in-progress: false
 
     steps:
@@ -185,6 +185,24 @@ jobs:
 
           rsync "${args[@]}" "$TARGET_FILE" "$DEST"
 
+      - name: Prepare Publish Branch
+        if: ${{ inputs.dry_run == false }}
+        env:
+          TOOL: ${{ inputs.tool }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          BR="publish/${TOOL}-${RUN_ID}"
+          echo "PUBLISH_BRANCH=$BR" >> "$GITHUB_ENV"
+          if git ls-remote --exit-code --heads origin "$BR" >/dev/null 2>&1; then
+            echo "Branch $BR already exists on origin; checking it out."
+            git fetch origin "+refs/heads/$BR:refs/remotes/origin/$BR"
+            git checkout -B "$BR" "origin/$BR"
+          else
+            echo "Creating new branch $BR from the checked-out main."
+            git checkout -b "$BR"
+          fi
+          echo "Prepared branch: $(git rev-parse --abbrev-ref HEAD)"
+
       - name: Update Manifest Entry
         env:
           TOOL: ${{ inputs.tool }}
@@ -259,15 +277,25 @@ jobs:
             exit 1
           fi
 
-          BRANCH_NAME="publish-$TOOL-$TARGET_OS-$TARGET_ARCH-$RUN_ID"
+          if [ -z "${PUBLISH_BRANCH:-}" ]; then
+            echo "::error::PUBLISH_BRANCH is not set; Prepare Publish Branch did not run."
+            exit 1
+          fi
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$BRANCH_NAME"
           git add manifest.json checksums.sha256 versions.json
           git commit -m "chore(publish): update manifest for $TOOL ($TARGET_OS/$TARGET_ARCH)"
-          git push origin "$BRANCH_NAME"
-          gh pr create \
-            --title "Publish $TOOL for $TARGET_OS/$TARGET_ARCH" \
-            --body "Automated publish update for $TOOL on $TARGET_OS/$TARGET_ARCH." \
-            --base main \
-            --head "$BRANCH_NAME"
+          git push origin "$PUBLISH_BRANCH"
+
+          PR_COUNT=$(gh pr list --head "$PUBLISH_BRANCH" --json number --jq 'length')
+          if [ "$PR_COUNT" -eq 0 ]; then
+            echo "No pull request for $PUBLISH_BRANCH yet; creating one."
+            gh pr create \
+              --title "Publish manifest updates for $TOOL (run $RUN_ID)" \
+              --body "Automated manifest updates for $TOOL from workflow run $RUN_ID." \
+              --base main \
+              --head "$PUBLISH_BRANCH"
+          else
+            echo "Pull request for $PUBLISH_BRANCH already exists ($PR_COUNT); pushed another commit."
+          fi
